@@ -1,0 +1,39 @@
+2. [DB-02] Quá trình Chuẩn hóa Cơ sở dữ liệu (Từ Bảng thô lên 3NF)
+Để cơ sở dữ liệu không bị trùng lặp dữ liệu và tránh lỗi khi thêm/xóa/sửa (Insert/Update/Delete Anomalies), nhóm tiến hành chuẩn hóa tuần tự từ bảng chưa chuẩn hóa (UNF) lên dạng chuẩn 3 (3NF):
+2.1. Dữ liệu ban đầu chưa chuẩn hóa (UNF)
+Giả sử ban đầu nhóm gom hết thông tin người dùng, quảng cáo, lượt xem và đổi thưởng vào một bảng duy nhất:
+UNF(MaND, HoTen, Email, SDT, SoDuXu, AdID, TieuDeQC, TenNhaQC, TenDanhMuc, ThoiLuong, XuThuong,
+DanhSachTinhMucTieu, DanhSachDoTuoiMucTieu, ViewID, TokenXem, GioBatDau, SoGiayDaXem,
+SoXuNhan, TenQua, XuCanDoi, MaThe, TrangThaiDon)
+2.2. Đưa về Dạng chuẩn 1 (1NF) - Khử các thuộc tính đa trị
+Nhận xét: DanhSachTinhMucTieu (ví dụ “Hà Nội, TP.HCM”) và DanhSachDoTuoiMucTieu là thuộc tính đa trị. Ngoài ra thông tin đổi thưởng (TenQua, MaThe...) lặp lại nhiều lần cho một người dùng.
+Cách nhóm xử lý: tách thuộc tính đa trị và dữ liệu lặp ra bảng riêng để mỗi ô chỉ chứa đúng 1 giá trị nguyên tử (Atomic Value):
+Tách bảng đối tượng mục tiêu: AD_TARGETING(TargetID, AdID, GioiTinh, TuoiTu, TuoiDen, Tinh)
+Tách bảng đổi thưởng: REDEMPTIONS_UNF(MaND, TenQua, XuCanDoi, MaThe, TrangThaiDon)
+Bảng lượt xem tạm thời: VIEWS_UNF(MaND, AdID, HoTen, SoDuXu, TieuDeQC, TenNhaQC, TenDanhMuc, ThoiLuong, TokenXem, GioBatDau, SoGiayDaXem, SoXuNhan)
+→ Kết quả: Dữ liệu đạt Dạng chuẩn 1 (1NF).
+2.3. Đưa về Dạng chuẩn 2 (2NF) - Khử phụ thuộc hàm một phần
+Nhận xét: Xét bảng VIEWS_UNF có khóa chính hỗn hợp là (MaND, AdID):
+HoTen, SoDuXu chỉ phụ thuộc vào MaND chứ không phụ thuộc vào AdID.
+TieuDeQC, TenNhaQC, TenDanhMuc, ThoiLuong chỉ phụ thuộc vào AdID chứ không phụ thuộc vào MaND.
+Chỉ có thông tin lượt xem: TokenXem, GioBatDau, SoGiayDaXem, SoXuNhan là phụ thuộc đồng thời vào cả (MaND, AdID).
+Cách nhóm xử lý: tách thành 3 bảng riêng để mọi thuộc tính không khóa phụ thuộc hoàn toàn vào toàn bộ khóa chính:
+Bảng Người dùng: USERS(UserID, Email, SDT, HoTen, SoDuXu, VaiTro)
+Bảng Quảng cáo: ADS(AdID, AdvertiserID, TieuDe, LinkVideo, ThoiLuong, XuThuong, TenDanhMuc, NganSach, TrangThai)
+Bảng Lượt xem: AD_VIEWS(ViewID, UserID, AdID, TokenXem, GioBatDau, SoGiayDaXem, SoXuNhan, TrangThai)
+Bảng Đổi thưởng: REDEMPTIONS(RedemptionID, UserID, TenQua, XuCanDoi, MaThe, TrangThai)
+→ Kết quả: Dữ liệu đạt Dạng chuẩn 2 (2NF).
+2.4. Đưa về Dạng chuẩn 3 (3NF) - Khử phụ thuộc hàm bắc cầu
+Nhận xét: có hai phụ thuộc bắc cầu:
+Trong ADS: AdID → CategoryID → TenDanhMuc. Nếu đổi tên danh mục “Game” thành “Trò chơi” phải sửa từng dòng quảng cáo, rất dễ sai sót.
+Trong REDEMPTIONS: RedemptionID → RewardID → TenQua, XuCanDoi. Nếu đổi giá quà thì phải sửa mọi đơn cũ, làm sai lịch sử.
+Cách nhóm xử lý: tách danh mục và quà ra bảng độc lập:
+AD_CATEGORIES(CategoryID, TenDanhMuc); bảng ADS chỉ giữ khóa ngoại CategoryID.
+REWARDS(RewardID, TenQua, LoaiQua, MenhGia, XuCanDoi, TonKho); bảng REDEMPTIONS giữ khóa ngoại RewardID và lưu riêng xu_spent tại thời điểm đổi.
+Bổ sung XU_TRANSACTIONS làm sổ cái, để số dư xu có thể đối soát và kiểm toán.
+→ Kết luận: Cơ sở dữ liệu sau khi tách gồm 8 bảng đã đạt Dạng chuẩn 3 (3NF), đảm bảo dữ liệu gọn gàng, không bị dư thừa thông tin.
+RÀ SOÁT VÀ BỔ SUNG HOÀN THIỆN
+Kết quả chuẩn hóa. Sau khi tách thuộc tính đa trị, các bảng phải có giá trị nguyên tử (1NF), mọi thuộc tính không khóa phụ thuộc đầy đủ vào khóa chính (2NF), và không có phụ thuộc bắc cầu giữa các thuộc tính không khóa (3NF).
+Ví dụ phụ thuộc. Thông tin người dùng phụ thuộc user_id; thông tin chiến dịch phụ thuộc ad_id; thông tin quà phụ thuộc reward_id. Không lặp tên người dùng, tên quà hoặc tên danh mục trong từng lượt xem nếu có thể truy xuất bằng khóa ngoại.
+Kiểm tra bất thường dữ liệu. Thiết kế cần tránh sửa tên danh mục ở nhiều dòng, không thể thêm quà nếu chưa có đơn đổi, hoặc xóa chiến dịch làm mất lịch sử giao dịch.
+Đảm bảo truy vết. Không xóa cứng các giao dịch xu và lượt xem đã phát sinh. Dùng trạng thái, nhật ký hoặc trường thời gian để lưu dấu vết phục vụ đối soát và khiếu nại.
