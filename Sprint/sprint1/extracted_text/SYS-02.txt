@@ -1,0 +1,126 @@
+[SYS-02] TÀI LIỆU ĐẶC TẢ 6 USE CASE CỐT LÕI
+Đề tài: YouTube Xu – Xem quảng cáo nhận xu
+Nhóm lựa chọn 6 Use Case quan trọng nhất (Must Have / Should Have) giải quyết trọn vẹn vòng đời nghiệp vụ: nhà quảng cáo đăng quảng cáo → admin duyệt → người xem xem và nhận xu → đổi xu lấy quà → chống gian lận.
+Use Case 1: Xem quảng cáo & nhận xu (UC-01)
+Tác nhân chính: Người xem (đã đăng nhập).
+Mục tiêu: Người xem xem trọn vẹn một quảng cáo và được cộng đúng số xu thưởng vào ví.
+Tiền điều kiện (Pre-conditions):
+Người xem đã đăng nhập, tài khoản ở trạng thái ACTIVE.
+Còn ít nhất một quảng cáo ACTIVE còn ngân sách, phù hợp đối tượng mục tiêu và hôm nay người xem chưa xem.
+Chưa vượt trần ngày (50 lượt hoặc 500 xu).
+Hậu điều kiện (Post-conditions):
+Bản ghi AD_VIEWS chuyển sang COMPLETED, ghi nhận số giây đã xem và số xu thưởng.
+Số dư xu của người xem tăng đúng reward_xu; sinh 01 dòng XU_TRANSACTIONS loại EARN.
+Ngân sách quảng cáo (spent_xu) tăng tương ứng.
+Luồng sự kiện chính (Basic Flow):
+Người xem vào mục “Xem quảng cáo”, hệ thống liệt kê quảng cáo phù hợp kèm thời lượng và số xu thưởng (5 xu ≤15s, 10 xu 16–30s, 20 xu 31–60s).
+Người xem chọn một quảng cáo và bấm “Xem ngay”.
+Hệ thống kiểm tra trần ngày, khoảng nghỉ tối thiểu 10 giây giữa hai quảng cáo và tính duy nhất UNIQUE(user_id, ad_id, view_date).
+Hệ thống giữ chỗ ngân sách, tạo bản ghi AD_VIEWS trạng thái STARTED cùng view_token do máy chủ cấp, rồi mở trình phát video.
+Trong lúc phát, trình duyệt gửi tín hiệu heartbeat mỗi 5 giây; máy chủ tự đếm thời gian xem thực tế, không tin số giây do client báo.
+Hết video, client gửi yêu cầu hoàn tất; máy chủ kiểm tra view_token hợp lệ, thời gian trôi qua ≥ thời lượng quảng cáo và số heartbeat đủ.
+Hệ thống thực hiện giao dịch (DB Transaction): cập nhật COMPLETED, cộng xu, ghi sổ cái XU_TRANSACTIONS, tăng spent_xu của quảng cáo.
+Giao diện hiển thị “+10 xu”, số dư mới và nút “Xem quảng cáo tiếp theo”.
+Luồng thay thế / Ngoại lệ (Alternative / Exception Flows):
+E1 – Hết hạn mức ngày: ở bước 3, hệ thống báo “Bạn đã đạt giới hạn 50 lượt/500 xu hôm nay, hãy quay lại vào ngày mai” và khóa nút xem.
+E2 – Xem chưa đủ thời lượng: người xem tua, chuyển tab hoặc thoát giữa chừng → lượt xem chuyển INVALID, không cộng xu, hiển thị “Bạn cần xem hết quảng cáo để nhận xu”.
+E3 – Mất kết nối: không nhận heartbeat quá 30 giây → lượt xem INVALID và nhả lại phần ngân sách đã giữ; người xem được xem lại.
+E4 – Quảng cáo hết ngân sách hoặc hết hạn: ở bước 4, hệ thống báo “Quảng cáo đã hết lượt” và gợi ý quảng cáo khác.
+E5 – Nghi ngờ gian lận (nhiều tài khoản cùng thiết bị, tốc độ xem bất thường): lượt xem bị đánh dấu INVALID và chuyển cho Admin xử lý theo UC-06.
+Use Case 2: Đổi xu lấy quà (UC-02)
+Tác nhân chính: Người xem.
+Mục tiêu: Người xem dùng xu tích lũy để đổi thẻ nạp điện thoại hoặc voucher.
+Tiền điều kiện (Pre-conditions):
+Người xem đã đăng nhập và đã xác thực số điện thoại.
+Số dư xu ≥ xu_cost của quà (ngưỡng tối thiểu 1.000 xu = 10.000đ).
+Quà còn tồn kho (stock_qty > 0) và đang mở đổi.
+Hậu điều kiện (Post-conditions):
+Số dư xu bị trừ đúng xu_cost; tạo bản ghi REDEMPTIONS và dòng XU_TRANSACTIONS loại REDEEM.
+Đơn tự động duyệt thì mã thẻ (gift_code) được gửi vào mục “Quà của tôi” và email.
+Luồng sự kiện chính (Basic Flow):
+Người xem vào mục “Đổi quà”, chọn quà (ví dụ thẻ điện thoại 20.000đ – 2.000 xu) và bấm “Đổi ngay”.
+Hệ thống kiểm tra số dư, tồn kho và giới hạn tối đa 3 đơn/ngày.
+Hệ thống gửi mã OTP về số điện thoại; người xem nhập đúng OTP.
+Hệ thống thực hiện giao dịch: trừ xu, giữ 1 mã thẻ trong kho, tạo REDEMPTIONS, ghi sổ cái.
+Với quà ≤ 50.000đ, đơn tự duyệt (APPROVED) và hiển thị mã thẻ ngay.
+Hệ thống thông báo “Đổi quà thành công” và chuyển sang trang “Quà của tôi”.
+Luồng thay thế / Ngoại lệ (Alternative / Exception Flows):
+E1 – Không đủ xu: báo “Bạn còn thiếu [n] xu để đổi quà này” và hủy thao tác.
+E2 – Hết hàng: quà chuyển trạng thái “Tạm hết”, nút đổi bị khóa.
+E3 – Quà trên 50.000đ: đơn ở trạng thái PENDING chờ Admin duyệt trong 24 giờ; nếu bị từ chối thì hoàn lại xu bằng dòng REFUND.
+E4 – Nhập sai OTP 3 lần: khóa chức năng đổi quà 15 phút.
+Use Case 3: Đăng ký tài khoản & xác thực (UC-03)
+Tác nhân chính: Khách vãng lai.
+Mục tiêu: Tạo tài khoản người xem duy nhất cho mỗi người để chống nuôi nhiều tài khoản ảo.
+Tiền điều kiện (Pre-conditions):
+Khách chưa đăng nhập; email và số điện thoại chưa từng được đăng ký.
+Hậu điều kiện (Post-conditions):
+Tài khoản mới vai trò VIEWER, trạng thái ACTIVE, số dư 0 xu được tạo trong bảng USERS.
+Nếu có mã mời hợp lệ, người mời được cộng 500 xu sau khi người mới xem đủ 5 quảng cáo.
+Luồng sự kiện chính (Basic Flow):
+Khách bấm “Đăng ký”, nhập họ tên, email, số điện thoại, mật khẩu, năm sinh, giới tính, tỉnh/thành.
+Hệ thống kiểm tra định dạng dữ liệu và độ tuổi tối thiểu 16.
+Hệ thống gửi OTP về số điện thoại; khách nhập đúng OTP.
+Hệ thống băm mật khẩu (bcrypt), lưu tài khoản và đăng nhập luôn.
+Hệ thống hiển thị hướng dẫn nhanh “Xem quảng cáo – nhận xu – đổi quà”.
+Luồng thay thế / Ngoại lệ (Alternative / Exception Flows):
+E1 – Email/SĐT đã tồn tại: báo “Thông tin này đã được dùng cho một tài khoản khác”.
+E2 – Dưới 16 tuổi: từ chối đăng ký.
+E3 – OTP sai hoặc hết hạn (5 phút): cho nhập lại tối đa 3 lần, sau đó yêu cầu gửi OTP mới.
+Use Case 4: Tạo chiến dịch quảng cáo (UC-04)
+Tác nhân chính: Nhà quảng cáo.
+Mục tiêu: Khởi tạo chiến dịch quảng cáo kèm ngân sách và đối tượng mục tiêu.
+Tiền điều kiện (Pre-conditions):
+Người dùng đăng nhập với vai trò ADVERTISER.
+Tài khoản có số dư ngân sách đủ cho chiến dịch.
+Hậu điều kiện (Post-conditions):
+Quảng cáo mới được ghi vào ADS với trạng thái PENDING (chờ duyệt); bộ lọc đối tượng lưu trong AD_TARGETING.
+Luồng sự kiện chính (Basic Flow):
+Nhà quảng cáo bấm “Tạo chiến dịch mới”.
+Nhập thông tin: tiêu đề, link video YouTube, thời lượng, danh mục, ngày bắt đầu/kết thúc.
+Nhập cấu hình: ngân sách (xu), số xu thưởng mỗi lượt (theo khung thời lượng).
+Thiết lập đối tượng: giới tính, độ tuổi từ–đến, tỉnh/thành (hoặc toàn quốc).
+Bấm “Gửi duyệt”; hệ thống kiểm tra tính hợp lệ, trừ ngân sách giữ chỗ và đặt trạng thái PENDING.
+Luồng thay thế / Ngoại lệ (Alternative / Exception Flows):
+E1 – Link video không hợp lệ hoặc không phát được: yêu cầu nhập lại.
+E2 – Thời lượng ngoài khoảng 5–60 giây: hệ thống từ chối lưu.
+E3 – Ngày kết thúc trước ngày bắt đầu hoặc ngân sách ≤ 0: báo lỗi, chặn lưu.
+Use Case 5: Duyệt quảng cáo (UC-05)
+Tác nhân chính: Quản trị viên.
+Mục tiêu: Đảm bảo chỉ quảng cáo đúng quy định mới được phát cho người xem.
+Tiền điều kiện (Pre-conditions):
+Người dùng đăng nhập với vai trò ADMIN.
+Có ít nhất một quảng cáo ở trạng thái PENDING.
+Hậu điều kiện (Post-conditions):
+Quảng cáo chuyển ACTIVE (được phát) hoặc REJECTED kèm lý do; ghi lại người duyệt (reviewed_by).
+Luồng sự kiện chính (Basic Flow):
+Admin mở danh sách “Quảng cáo chờ duyệt”.
+Admin xem trước video, thông tin chiến dịch và đối tượng mục tiêu.
+Admin đối chiếu với quy định nội dung (không phản cảm, không lừa đảo, không cờ bạc, không thông tin sai sự thật).
+Admin bấm “Duyệt”; hệ thống chuyển trạng thái sang ACTIVE và gửi thông báo cho nhà quảng cáo.
+Luồng thay thế / Ngoại lệ (Alternative / Exception Flows):
+E1 – Vi phạm nội dung: Admin chọn lý do và bấm “Từ chối”; hệ thống hoàn lại ngân sách giữ chỗ cho nhà quảng cáo.
+E2 – Nhà quảng cáo đã tạm dừng chiến dịch trong lúc chờ duyệt: thao tác duyệt không còn hiệu lực.
+Use Case 6: Phát hiện & xử lý gian lận, thu hồi xu (UC-06)
+Tác nhân chính: Quản trị viên.
+Mục tiêu: Ngăn chặn người xem gian lận (bot, đa tài khoản, tool tự xem) làm thất thoát ngân sách quảng cáo.
+Tiền điều kiện (Pre-conditions):
+Người dùng đăng nhập với vai trò ADMIN.
+Hệ thống đã ghi nhận tín hiệu nghi vấn (cờ cảnh báo tự động hoặc báo cáo).
+Hậu điều kiện (Post-conditions):
+Lượt xem gian lận bị INVALID; xu bị thu hồi bằng dòng ADJUST; tài khoản vi phạm có thể bị LOCKED.
+Luồng sự kiện chính (Basic Flow):
+Admin mở màn hình “Cảnh báo gian lận” liệt kê tài khoản nghi vấn (cùng thiết bị/IP, >50 lượt/ngày, thời gian xem nhanh bất thường).
+Admin xem chi tiết lịch sử AD_VIEWS và XU_TRANSACTIONS của tài khoản.
+Admin chọn hành động: Bỏ qua / Vô hiệu các lượt xem / Khóa tài khoản.
+Hệ thống cập nhật trạng thái, thu hồi xu tương ứng bằng giao dịch ADJUST và ghi nhật ký.
+Hệ thống thông báo kết quả cho người xem qua email.
+Luồng thay thế / Ngoại lệ (Alternative / Exception Flows):
+E1 – Số dư xu không đủ để thu hồi: hệ thống cho số dư về 0 và ghi phần còn thiếu vào ghi chú.
+E2 – Người xem khiếu nại: Admin mở khóa và hoàn xu bằng dòng REFUND sau khi kiểm tra lại.
+RÀ SOÁT VÀ BỔ SUNG HOÀN THIỆN
+Quy tắc bảo đảm cộng xu đúng một lần. API hoàn tất phải kiểm tra trạng thái STARTED, token chưa hết hạn, thời lượng phía máy chủ và tính duy nhất của giao dịch EARN. Yêu cầu gửi lặp lại phải trả kết quả idempotent, không cộng thêm xu.
+Giải phóng tài nguyên khi lỗi. Nếu lượt xem INVALID, hết hạn hoặc mất kết nối, hệ thống giải phóng ngân sách đã giữ; nếu giao dịch cộng xu thất bại thì toàn bộ thay đổi liên quan phải rollback.
+Phân quyền và kiểm toán. Advertiser chỉ xem/sửa chiến dịch thuộc mình. Admin phải có nhật ký người thực hiện, thời điểm, lý do và dữ liệu trước/sau cho hành động duyệt, khóa tài khoản hoặc điều chỉnh xu.
+Khiếu nại và xử lý nhầm. Cảnh báo gian lận nên chuyển trạng thái cần rà soát thay vì tự động khóa vĩnh viễn. Người xem cần thấy lý do, kênh khiếu nại và kết quả xử lý.
+Điểm cần thống nhất trước khi lập trình. Chốt một bảng cấu hình dùng chung cho khung thời lượng–xu thưởng, giới hạn ngày, thời hạn token/OTP, ngưỡng duyệt đổi quà và quy tắc hoàn ngân sách; không để các màn hình/API tự định nghĩa khác nhau.

@@ -1,0 +1,271 @@
+3. [DB-03] Chuyển đổi thành các Bảng dữ liệu vật lý (Tables Schema & Script SQL)
+Dựa trên sơ đồ và kết quả chuẩn hóa ở trên, nhóm quy định chi tiết 8 bảng như sau:
+3.1. Chi tiết các Bảng
+Bảng 1: ad_categories (Danh mục quảng cáo)
+Mục đích: Phân loại quảng cáo để người xem lọc theo sở thích.
+
+--- TABLE ---
+Tên cột | Kiểu dữ liệu | Ràng buộc | Ý nghĩa
+category_id | INT | PK, Auto Increment | Mã danh mục
+category_name | VARCHAR(100) | NOT NULL, UNIQUE | Tên danh mục (Game, Giáo dục...)
+--- END TABLE ---
+
+Bảng 2: users (Tài khoản người dùng)
+Mục đích: Lưu tài khoản người xem, nhà quảng cáo và admin kèm số dư xu.
+
+--- TABLE ---
+Tên cột | Kiểu dữ liệu | Ràng buộc | Ý nghĩa
+user_id | INT | PK, Auto Increment | Mã tài khoản
+email | VARCHAR(100) | UNIQUE, NOT NULL | Email đăng nhập
+phone | VARCHAR(15) | UNIQUE, NOT NULL | Số điện thoại (mỗi SĐT một tài khoản)
+full_name | VARCHAR(100) | NOT NULL | Họ và tên
+password_hash | VARCHAR(255) | NOT NULL | Mật khẩu đã băm bcrypt
+birth_year / gender / province | SMALLINT / ENUM / VARCHAR(50) | NULL | Dùng để khớp đối tượng mục tiêu
+system_role | ENUM | NOT NULL | 'VIEWER', 'ADVERTISER', 'ADMIN'
+account_status | ENUM | DEFAULT 'ACTIVE' | 'ACTIVE', 'LOCKED'
+xu_balance | INT | DEFAULT 0, ≥ 0 | Số dư xu hiện tại
+referred_by | INT | FK → users, NULL | Người đã mời
+created_at | DATETIME | DEFAULT CURRENT_TIMESTAMP | Ngày tạo
+--- END TABLE ---
+
+Bảng 3: ads (Quảng cáo / Chiến dịch)
+Mục đích: Lưu chiến dịch do nhà quảng cáo tạo.
+
+--- TABLE ---
+Tên cột | Kiểu dữ liệu | Ràng buộc | Ý nghĩa
+ad_id | INT | PK, Auto Increment | Mã quảng cáo
+advertiser_id | INT | FK → users | Nhà quảng cáo
+category_id | INT | FK → ad_categories | Danh mục
+title | VARCHAR(255) | NOT NULL | Tiêu đề
+video_url | VARCHAR(255) | NOT NULL | Link video YouTube
+duration_sec | INT | NOT NULL, 5–60 | Thời lượng (giây)
+reward_xu | INT | NOT NULL | Xu thưởng mỗi lượt xem
+budget_xu / spent_xu | INT | NOT NULL, spent ≤ budget | Ngân sách và phần đã dùng
+start_date / end_date | DATE | NOT NULL | Thời gian chạy
+status | ENUM | DEFAULT 'PENDING' | 'DRAFT','PENDING','ACTIVE','PAUSED','ENDED','REJECTED'
+reject_reason | VARCHAR(255) | NULL | Lý do từ chối
+reviewed_by | INT | FK → users, NULL | Admin duyệt
+--- END TABLE ---
+
+Bảng 4: ad_targeting (Đối tượng mục tiêu)
+Mục đích: Xác định quảng cáo dành cho ai (toàn quốc hoặc theo nhóm).
+
+--- TABLE ---
+Tên cột | Kiểu dữ liệu | Ràng buộc | Ý nghĩa
+target_id | INT | PK, Auto Increment | Mã quy tắc
+ad_id | INT | FK → ads | Thuộc quảng cáo nào
+gender | ENUM | NULL | Giới tính (NULL = tất cả)
+age_from / age_to | TINYINT | NULL | Khoảng tuổi
+province | VARCHAR(50) | NULL | Tỉnh/thành
+--- END TABLE ---
+
+Bảng 5: ad_views (Lượt xem quảng cáo)
+Mục đích: Quản lý lượt xem, chống xem trùng và lưu vết phục vụ chống gian lận.
+
+--- TABLE ---
+Tên cột | Kiểu dữ liệu | Ràng buộc | Ý nghĩa
+view_id | BIGINT | PK, Auto Increment | Mã lượt xem
+user_id | INT | FK → users | Người xem
+ad_id | INT | FK → ads | Quảng cáo
+view_token | VARCHAR(64) | UNIQUE, NOT NULL | Token do máy chủ cấp cho mỗi lượt
+view_date | DATE | NOT NULL | Ngày xem
+started_at / completed_at | DATETIME | NULL (completed) | Bắt đầu / hoàn tất
+watched_seconds | INT | DEFAULT 0 | Số giây xem thực tế (do server đếm)
+reward_xu | INT | DEFAULT 0 | Xu được nhận
+device_id / ip_address | VARCHAR | NULL | Dấu vết thiết bị, IP
+view_status | ENUM | DEFAULT 'STARTED' | 'STARTED','COMPLETED','INVALID'
+RÀNG BUỘC | UNIQUE(user_id, ad_id, view_date) |  | Một người chỉ nhận xu 1 lần/quảng cáo/ngày
+--- END TABLE ---
+
+Bảng 6: rewards (Danh mục quà)
+Mục đích: Quản lý quà đổi thưởng và tồn kho.
+
+--- TABLE ---
+Tên cột | Kiểu dữ liệu | Ràng buộc | Ý nghĩa
+reward_id | INT | PK, Auto Increment | Mã quà
+reward_name | VARCHAR(150) | NOT NULL | Tên quà
+reward_type | ENUM | NOT NULL | 'PHONE_CARD','E_VOUCHER'
+face_value_vnd | INT | NOT NULL | Mệnh giá (VNĐ)
+xu_cost | INT | NOT NULL, > 0 | Số xu cần đổi (1 xu = 10đ)
+stock_qty | INT | DEFAULT 0, ≥ 0 | Tồn kho
+is_active | BOOLEAN | DEFAULT TRUE | Đang mở đổi
+--- END TABLE ---
+
+Bảng 7: redemptions (Đơn đổi thưởng)
+Mục đích: Theo dõi đơn đổi xu lấy quà.
+
+--- TABLE ---
+Tên cột | Kiểu dữ liệu | Ràng buộc | Ý nghĩa
+redemption_id | INT | PK, Auto Increment | Mã đơn
+user_id | INT | FK → users | Người đổi
+reward_id | INT | FK → rewards | Quà
+xu_spent | INT | NOT NULL | Xu trừ tại thời điểm đổi
+gift_code | VARCHAR(50) | NULL | Mã thẻ / voucher
+status | ENUM | DEFAULT 'PENDING' | 'PENDING','APPROVED','DELIVERED','REJECTED'
+requested_at / processed_at | DATETIME |  | Thời điểm yêu cầu / xử lý
+processed_by | INT | FK → users, NULL | Admin xử lý
+--- END TABLE ---
+
+Bảng 8: xu_transactions (Sổ cái xu)
+Mục đích: Ghi mọi biến động xu để đối soát, không cho sửa/xóa.
+
+--- TABLE ---
+Tên cột | Kiểu dữ liệu | Ràng buộc | Ý nghĩa
+txn_id | BIGINT | PK, Auto Increment | Mã giao dịch
+user_id | INT | FK → users | Chủ ví
+view_id | BIGINT | FK → ad_views, NULL | Lượt xem sinh ra giao dịch EARN
+redemption_id | INT | FK → redemptions, NULL | Đơn sinh ra REDEEM/REFUND
+txn_type | ENUM | NOT NULL | 'EARN','REDEEM','REFUND','BONUS','ADJUST'
+amount | INT | NOT NULL | Số xu (+/−)
+balance_after | INT | NOT NULL | Số dư sau giao dịch
+note / created_at | VARCHAR / DATETIME |  | Ghi chú, thời điểm
+--- END TABLE ---
+
+3.2. Script SQL tạo bảng thực tế (MySQL 8)
+CREATE DATABASE IF NOT EXISTS youtube_xu CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+USE youtube_xu;
+CREATE TABLE ad_categories (
+category_id   INT AUTO_INCREMENT PRIMARY KEY,
+category_name VARCHAR(100) NOT NULL UNIQUE
+);
+CREATE TABLE users (
+user_id        INT AUTO_INCREMENT PRIMARY KEY,
+email          VARCHAR(100) NOT NULL UNIQUE,
+phone          VARCHAR(15)  NOT NULL UNIQUE,
+full_name      VARCHAR(100) NOT NULL,
+password_hash  VARCHAR(255) NOT NULL,
+birth_year     SMALLINT NULL,
+gender         ENUM('MALE','FEMALE','OTHER') NULL,
+province       VARCHAR(50) NULL,
+system_role    ENUM('VIEWER','ADVERTISER','ADMIN') NOT NULL DEFAULT 'VIEWER',
+account_status ENUM('ACTIVE','LOCKED') NOT NULL DEFAULT 'ACTIVE',
+xu_balance     INT NOT NULL DEFAULT 0,
+referred_by    INT NULL,
+created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+CONSTRAINT chk_balance CHECK (xu_balance >= 0),
+FOREIGN KEY (referred_by) REFERENCES users(user_id)
+);
+CREATE TABLE ads (
+ad_id          INT AUTO_INCREMENT PRIMARY KEY,
+advertiser_id  INT NOT NULL,
+category_id    INT NOT NULL,
+title          VARCHAR(255) NOT NULL,
+video_url      VARCHAR(255) NOT NULL,
+duration_sec   INT NOT NULL,
+reward_xu      INT NOT NULL,
+budget_xu      INT NOT NULL,
+spent_xu       INT NOT NULL DEFAULT 0,
+start_date     DATE NOT NULL,
+end_date       DATE NOT NULL,
+status         ENUM('DRAFT','PENDING','ACTIVE','PAUSED','ENDED','REJECTED') NOT NULL DEFAULT 'PENDING',
+reject_reason  VARCHAR(255) NULL,
+reviewed_by    INT NULL,
+CONSTRAINT chk_duration CHECK (duration_sec BETWEEN 5 AND 60),
+CONSTRAINT chk_budget   CHECK (budget_xu > 0 AND spent_xu <= budget_xu),
+CONSTRAINT chk_dates    CHECK (end_date >= start_date),
+FOREIGN KEY (advertiser_id) REFERENCES users(user_id),
+FOREIGN KEY (category_id)   REFERENCES ad_categories(category_id),
+FOREIGN KEY (reviewed_by)   REFERENCES users(user_id)
+);
+CREATE TABLE ad_targeting (
+target_id INT AUTO_INCREMENT PRIMARY KEY,
+ad_id     INT NOT NULL,
+gender    ENUM('MALE','FEMALE','OTHER') NULL,
+age_from  TINYINT NULL,
+age_to    TINYINT NULL,
+province  VARCHAR(50) NULL,
+FOREIGN KEY (ad_id) REFERENCES ads(ad_id) ON DELETE CASCADE
+);
+CREATE TABLE ad_views (
+view_id         BIGINT AUTO_INCREMENT PRIMARY KEY,
+user_id         INT NOT NULL,
+ad_id           INT NOT NULL,
+view_token      VARCHAR(64) NOT NULL UNIQUE,
+view_date       DATE NOT NULL,
+started_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+completed_at    DATETIME NULL,
+watched_seconds INT NOT NULL DEFAULT 0,
+reward_xu       INT NOT NULL DEFAULT 0,
+device_id       VARCHAR(64) NULL,
+ip_address      VARCHAR(45) NULL,
+view_status     ENUM('STARTED','COMPLETED','INVALID') NOT NULL DEFAULT 'STARTED',
+UNIQUE KEY uq_user_ad_day (user_id, ad_id, view_date),
+FOREIGN KEY (user_id) REFERENCES users(user_id),
+FOREIGN KEY (ad_id)   REFERENCES ads(ad_id)
+);
+CREATE TABLE rewards (
+reward_id      INT AUTO_INCREMENT PRIMARY KEY,
+reward_name    VARCHAR(150) NOT NULL,
+reward_type    ENUM('PHONE_CARD','E_VOUCHER') NOT NULL,
+face_value_vnd INT NOT NULL,
+xu_cost        INT NOT NULL,
+stock_qty      INT NOT NULL DEFAULT 0,
+is_active      BOOLEAN NOT NULL DEFAULT TRUE,
+CONSTRAINT chk_cost CHECK (xu_cost > 0 AND stock_qty >= 0)
+);
+CREATE TABLE redemptions (
+redemption_id INT AUTO_INCREMENT PRIMARY KEY,
+user_id       INT NOT NULL,
+reward_id     INT NOT NULL,
+xu_spent      INT NOT NULL,
+gift_code     VARCHAR(50) NULL,
+status        ENUM('PENDING','APPROVED','DELIVERED','REJECTED') NOT NULL DEFAULT 'PENDING',
+requested_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+processed_at  DATETIME NULL,
+processed_by  INT NULL,
+FOREIGN KEY (user_id)      REFERENCES users(user_id),
+FOREIGN KEY (reward_id)    REFERENCES rewards(reward_id),
+FOREIGN KEY (processed_by) REFERENCES users(user_id)
+);
+CREATE TABLE xu_transactions (
+txn_id        BIGINT AUTO_INCREMENT PRIMARY KEY,
+user_id       INT NOT NULL,
+view_id       BIGINT NULL,
+redemption_id INT NULL,
+txn_type      ENUM('EARN','REDEEM','REFUND','BONUS','ADJUST') NOT NULL,
+amount        INT NOT NULL,
+balance_after INT NOT NULL,
+note          VARCHAR(255) NULL,
+created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+FOREIGN KEY (user_id)       REFERENCES users(user_id),
+FOREIGN KEY (view_id)       REFERENCES ad_views(view_id),
+FOREIGN KEY (redemption_id) REFERENCES redemptions(redemption_id)
+);
+CREATE INDEX idx_views_user_date ON ad_views(user_id, view_date);
+CREATE INDEX idx_txn_user_time   ON xu_transactions(user_id, created_at);
+CREATE INDEX idx_ads_status      ON ads(status, start_date, end_date);
+3.3. Dữ liệu mẫu và truy vấn nghiệp vụ tiêu biểu
+-- Dữ liệu mẫu
+INSERT INTO ad_categories(category_name) VALUES ('Game'),('Giáo dục'),('Thời trang'),('Ẩm thực'),('Công nghệ');
+INSERT INTO rewards(reward_name,reward_type,face_value_vnd,xu_cost,stock_qty) VALUES
+('Thẻ nạp điện thoại 10.000đ','PHONE_CARD',10000,1000,200),
+('Thẻ nạp điện thoại 20.000đ','PHONE_CARD',20000,2000,150),
+('Thẻ nạp điện thoại 50.000đ','PHONE_CARD',50000,5000,50),
+('Voucher ví điện tử 20.000đ','E_VOUCHER',20000,2000,100);
+-- Truy vấn 1: quảng cáo đang chạy, còn ngân sách và người dùng (user_id = 5) chưa xem hôm nay
+SELECT a.ad_id, a.title, a.duration_sec, a.reward_xu
+FROM ads a
+-- (lọc đối tượng mục tiêu theo ad_targeting được áp dụng thêm ở tầng ứng dụng)
+WHERE a.status='ACTIVE' AND CURDATE() BETWEEN a.start_date AND a.end_date
+AND a.spent_xu + a.reward_xu <= a.budget_xu
+AND NOT EXISTS (SELECT 1 FROM ad_views v WHERE v.ad_id=a.ad_id AND v.user_id=5 AND v.view_date=CURDATE())
+ORDER BY a.reward_xu DESC;
+-- Truy vấn 2: tổng xu và số lượt xem hợp lệ của một người trong ngày (kiểm tra trần 50 lượt/500 xu)
+SELECT COUNT(*) AS luot, COALESCE(SUM(reward_xu),0) AS xu
+FROM ad_views WHERE user_id=5 AND view_date=CURDATE() AND view_status='COMPLETED';
+-- Truy vấn 3: hoàn tất lượt xem và cộng xu (chạy trong một transaction)
+START TRANSACTION;
+UPDATE ad_views SET view_status='COMPLETED', completed_at=NOW(), watched_seconds=30, reward_xu=10
+WHERE view_token='tok_abc123' AND view_status='STARTED';
+UPDATE users SET xu_balance = xu_balance + 10 WHERE user_id=5;
+UPDATE ads   SET spent_xu = spent_xu + 10 WHERE ad_id=1;
+INSERT INTO xu_transactions(user_id,view_id,txn_type,amount,balance_after,note)
+SELECT 5, view_id, 'EARN', 10, xu_balance, 'Xem quảng cáo' FROM ad_views v JOIN users u ON u.user_id=v.user_id
+WHERE v.view_token='tok_abc123';
+COMMIT;
+RÀ SOÁT VÀ BỔ SUNG HOÀN THIỆN
+Quy tắc ràng buộc bắt buộc. Thiết lập khóa chính, khóa ngoại, UNIQUE cho email/số điện thoại và lượt xem theo (user_id, ad_id, view_date); CHECK cho số dư, ngân sách, thời lượng và số xu không âm khi phù hợp với nghiệp vụ.
+Giao dịch nguyên tử. Khi hoàn tất lượt xem, cập nhật trạng thái lượt xem, cộng số dư, thêm XU_TRANSACTIONS và tăng ngân sách đã dùng trong một transaction. Khi đổi quà, trừ xu và giữ mã quà/tồn kho trong một transaction.
+Chống xử lý đồng thời. Dùng khóa hàng hoặc cập nhật có điều kiện khi giữ ngân sách, trừ xu và giảm tồn kho để hai yêu cầu đồng thời không dùng cùng một mã quà hoặc vượt ngân sách.
+Chỉ mục đề xuất. Tạo chỉ mục cho ads(status, end_at), ad_views(user_id, ad_id, view_date), xu_transactions(user_id, created_at) và redemptions(user_id, created_at) sau khi kiểm tra kế hoạch truy vấn.
+Bảo vệ dữ liệu nhạy cảm. Mật khẩu lưu dạng hash; OTP và view_token có thời hạn; không lưu OTP/mật khẩu trong log. Mã thẻ quà cần được mã hóa hoặc hạn chế quyền đọc.

@@ -1,0 +1,41 @@
+[SYS-01] PHÂN RÃ CHỨC NĂNG VÀ TÁC NHÂN
+Đề tài: YouTube Xu – Xem quảng cáo nhận xu
+Theo chỉ dẫn của thầy, hệ thống được thiết kế ở mức tổng quát bao gồm 4 tác nhân (Actors) tương tác trực tiếp:
+Khách vãng lai (Guest): người dùng chưa đăng nhập, chỉ xem được thông tin giới thiệu, cách nhận xu và danh mục quà.
+Người xem (Viewer): người dùng đã có tài khoản, xem quảng cáo video để tích xu và đổi xu lấy thẻ điện thoại, voucher.
+Nhà quảng cáo (Advertiser): doanh nghiệp/cá nhân trả ngân sách để quảng cáo video của mình đến người xem đúng đối tượng.
+Quản trị viên (Admin): kiểm duyệt quảng cáo, đặt quy tắc phát xu, duyệt đơn đổi thưởng, phát hiện gian lận và xuất báo cáo.
+1. Phân rã chức năng theo 4 Tác nhân
+Tác nhân 1: Khách vãng lai (Guest)
+UC-G01: Xem trang giới thiệu và cách thức kiếm xu.
+UC-G02: Xem danh mục quà và bảng quy đổi xu (ví dụ 1.000 xu = thẻ điện thoại 10.000đ).
+UC-G03: Đăng ký tài khoản (email + số điện thoại, xác thực OTP).
+UC-G04: Đăng nhập vào hệ thống.
+Tác nhân 2: Người xem (Viewer – kế thừa từ Khách vãng lai)
+UC-V01: Tra cứu & lọc quảng cáo theo danh mục, thời lượng, số xu thưởng.
+UC-V02: Xem quảng cáo và nhận xu (xem đủ thời lượng, mỗi quảng cáo tối đa 1 lần/ngày, trần 50 lượt hoặc 500 xu/ngày).
+UC-V03: Xem ví xu và lịch sử giao dịch (cộng xu, trừ xu, hoàn xu).
+UC-V04: Đổi xu lấy quà (thẻ nạp điện thoại, voucher ví điện tử), xác nhận bằng OTP.
+UC-V05: Theo dõi trạng thái đơn đổi thưởng (Chờ duyệt / Đã duyệt / Đã gửi mã / Từ chối).
+UC-V06: Cập nhật hồ sơ (năm sinh, giới tính, tỉnh/thành) và mời bạn bè nhận thưởng.
+Tác nhân 3: Nhà quảng cáo (Advertiser)
+UC-AV01: Tạo chiến dịch quảng cáo (tiêu đề, link video, thời lượng, ngày chạy).
+UC-AV02: Cấu hình đối tượng mục tiêu (giới tính, độ tuổi, tỉnh/thành) và mức xu thưởng mỗi lượt xem.
+UC-AV03: Nạp ngân sách cho chiến dịch (mô phỏng, không tích hợp cổng thanh toán thật).
+UC-AV04: Tạm dừng / tiếp tục chiến dịch.
+UC-AV05: Xem báo cáo hiệu quả: số lượt xem hoàn thành, tỷ lệ xem hết, chi phí trên mỗi lượt xem.
+Tác nhân 4: Quản trị viên (Admin)
+UC-AD01: Duyệt / từ chối quảng cáo trước khi cho chạy.
+UC-AD02: Cấu hình quy tắc xu (xu theo thời lượng, trần ngày, ngưỡng đổi tối thiểu, thời gian chờ giữa 2 quảng cáo).
+UC-AD03: Quản lý danh mục quà và tồn kho mã thẻ.
+UC-AD04: Duyệt đơn đổi thưởng giá trị lớn (trên 50.000đ).
+UC-AD05: Phát hiện và xử lý gian lận (khóa tài khoản, thu hồi xu, vô hiệu lượt xem).
+UC-AD06: Xuất báo cáo Excel (xu phát hành, xu đã đổi, chi phí quảng cáo).
+UC-AD07: Xem thống kê người dùng và lượt xem theo ngày/danh mục.
+2. Sơ đồ Use Case tổng quát
+Hình 1. Sơ đồ Use Case tổng quát của hệ thống YouTube Xu
+RÀ SOÁT VÀ BỔ SUNG HOÀN THIỆN
+Ranh giới hệ thống. Guest chỉ xem thông tin công khai và đăng ký; Viewer quản lý lượt xem, ví và đổi quà; Advertiser chỉ quản lý chiến dịch của mình; Admin quản trị toàn hệ thống. Mọi API phải kiểm tra quyền ở máy chủ.
+Quy tắc nghiệp vụ thống nhất. Thưởng chỉ được cộng sau khi máy chủ xác nhận lượt xem hợp lệ. Mỗi quảng cáo chỉ nhận thưởng một lần/người/ngày; hạn mức mặc định là 50 lượt hoặc 500 xu/ngày.
+Tiêu chí hoàn thành phân rã. Mỗi chức năng cấp cao cần liên kết với ít nhất một use case, màn hình/API tương ứng và tiêu chí nghiệm thu để truy vết từ yêu cầu đến kiểm thử.
+Ngoài phạm vi phiên bản đầu. Thanh toán tiền thật, ứng dụng di động native và tích hợp YouTube API chính thức chưa thuộc MVP; cần ghi rõ trong báo cáo để tránh hiểu nhầm về khả năng đã triển khai.
