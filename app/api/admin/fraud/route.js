@@ -13,7 +13,7 @@ export async function GET() {
        FROM users u
        LEFT JOIN ad_views v ON u.user_id = v.user_id
        WHERE u.system_role = 'VIEWER'
-       GROUP BY u.user_id
+       GROUP BY u.user_id, u.full_name, u.email, u.phone, u.account_status, u.xu_balance
        ORDER BY invalid_views DESC, u.account_status ASC, u.user_id DESC`
     );
 

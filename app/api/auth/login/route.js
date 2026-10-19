@@ -17,7 +17,7 @@ export async function POST(request) {
 
     // Tìm kiếm người dùng theo Email hoặc Số điện thoại
     const users = await query(
-      `SELECT user_id, email, phone, full_name, password_hash, birth_year, gender, province, system_role, account_status, xu_balance, referred_by, created_at 
+      `SELECT user_id, email, phone, referral_code, full_name, password_hash, birth_year, gender, province, system_role, account_status, xu_balance, referred_by, created_at
        FROM users 
        WHERE email = ? OR phone = ? 
        LIMIT 1`,

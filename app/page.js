@@ -20,7 +20,13 @@ export default function YouTubeXuApp() {
   const [ads, setAds] = useState([]);
   const [rewards, setRewards] = useState([]);
   const [redemptions, setRedemptions] = useState([]);
-  const [walletData, setWalletData] = useState({ balance: 0, total_earned: 0, total_spent: 0, transactions: [] });
+  const [walletData, setWalletData] = useState({
+    balance: 0,
+    total_earned: 0,
+    total_spent: 0,
+    referrals: { code: '', invited_users: 0, bonus_xu: 0 },
+    transactions: []
+  });
   const [adminStats, setAdminStats] = useState(null);
   const [adminAds, setAdminAds] = useState([]);
   const [fraudData, setFraudData] = useState({ suspicious_users: [], recent_invalid_views: [] });
@@ -61,6 +67,7 @@ export default function YouTubeXuApp() {
     email: '',
     phone: '',
     password: '',
+    referral_code: '',
     birth_year: 2002,
     gender: 'MALE',
     province: 'Hà Nội'
@@ -196,6 +203,16 @@ export default function YouTubeXuApp() {
     }
   };
 
+  const handleCopyReferralCode = async () => {
+    try {
+      await navigator.clipboard.writeText(walletData.referrals.code);
+      showToast('Đã sao chép mã giới thiệu!', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('Không thể sao chép mã giới thiệu trên trình duyệt này.', 'error');
+    }
+  };
+
   // Load Admin Data
   const loadAdminData = async () => {
     try {
@@ -303,7 +320,10 @@ export default function YouTubeXuApp() {
       const data = await res.json();
 
       if (data.success) {
-        showToast(`🎉 ${data.message}`, 'success');
+        const referralMessage = data.referral_bonus_xu > 0
+          ? ` Người giới thiệu cũng nhận +${data.referral_bonus_xu} xu.`
+          : '';
+        showToast(`🎉 ${data.message}${referralMessage}`, 'success');
         setCurrentUser(prev => ({ ...prev, xu_balance: data.balance_after }));
         setWatchingAd(null);
         loadAds();
@@ -535,7 +555,7 @@ export default function YouTubeXuApp() {
       });
       const data = await res.json();
       if (data.success) {
-        showToast('Đăng ký tài khoản thành công! Tự động đăng nhập...', 'success');
+        showToast(`Đăng ký thành công! Mã giới thiệu của bạn: ${data.referral_code}`, 'success');
         setShowRegisterModal(false);
         loadUser(data.user_id);
       } else {
@@ -1100,6 +1120,22 @@ export default function YouTubeXuApp() {
         ======================================================== */}
         {activeTab === 'wallet' && (
           <div>
+            <div className="glass-panel" style={{ padding: '22px 24px', marginBottom: '20px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '20px', flexWrap: 'wrap' }}>
+              <div>
+                <h3 style={{ fontSize: '1.05rem', fontWeight: 700, marginBottom: '5px' }}>Mời bạn bè, nhận 10% xu thưởng</h3>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
+                  Nhận hoa hồng mỗi khi bạn được mời hoàn tất xem quảng cáo. Hoa hồng được làm tròn đến xu gần nhất.
+                </p>
+                <div style={{ display: 'flex', gap: '18px', marginTop: '12px', fontSize: '0.82rem' }}>
+                  <span>Bạn đã mời: <strong>{walletData.referrals.invited_users}</strong></span>
+                  <span>Xu hoa hồng: <strong style={{ color: '#34d399' }}>{walletData.referrals.bonus_xu?.toLocaleString()} xu</strong></span>
+                </div>
+              </div>
+              <button className="btn btn-secondary btn-sm" onClick={handleCopyReferralCode} disabled={!walletData.referrals.code}>
+                <Copy size={14} /> Mã: {walletData.referrals.code || 'Đang tải'}
+              </button>
+            </div>
+
             {/* Wallet Overview Cards */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '30px' }}>
               <div className="glass-panel" style={{ padding: '24px', background: 'linear-gradient(135deg, rgba(245, 158, 11, 0.12), rgba(245, 158, 11, 0.02))' }}>
@@ -1330,6 +1366,41 @@ export default function YouTubeXuApp() {
                         onChange={(e) => setNewCampaign({ ...newCampaign, target_province: e.target.value })}
                       />
                     </div>
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px' }}>
+                    <div>
+                      <label className="form-label">Độ tuổi tối thiểu</label>
+                      <input
+                        type="number"
+                        className="form-input"
+                        min="16"
+                        max="120"
+                        placeholder="Không giới hạn"
+                        value={newCampaign.target_age_from}
+                        onChange={(e) => setNewCampaign({
+                          ...newCampaign,
+                          target_age_from: e.target.value === '' ? '' : parseInt(e.target.value, 10)
+                        })}
+                      />
+                    </div>
+                    <div>
+                      <label className="form-label">Độ tuổi tối đa</label>
+                      <input
+                        type="number"
+                        className="form-input"
+                        min="16"
+                        max="120"
+                        placeholder="Không giới hạn"
+                        value={newCampaign.target_age_to}
+                        onChange={(e) => setNewCampaign({
+                          ...newCampaign,
+                          target_age_to: e.target.value === '' ? '' : parseInt(e.target.value, 10)
+                        })}
+                      />
+                    </div>
+                    <span style={{ gridColumn: '1 / -1', fontSize: '0.72rem', color: 'var(--text-dim)' }}>
+                      Chỉ người xem nằm trong khoảng tuổi này mới thấy chiến dịch. Để trống cả hai ô để không giới hạn tuổi.
+                    </span>
                   </div>
                 </div>
 
@@ -1884,6 +1955,17 @@ export default function YouTubeXuApp() {
                   value={registerForm.phone}
                   onChange={(e) => setRegisterForm({ ...registerForm, phone: e.target.value })}
                   required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Mã giới thiệu (không bắt buộc)</label>
+                <input
+                  className="form-input"
+                  placeholder="VD: YX00000005"
+                  maxLength={20}
+                  value={registerForm.referral_code}
+                  onChange={(e) => setRegisterForm({ ...registerForm, referral_code: e.target.value.toUpperCase() })}
                 />
               </div>
 

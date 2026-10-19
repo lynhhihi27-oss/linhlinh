@@ -36,6 +36,7 @@ CREATE TABLE users (
     user_id        INT IDENTITY(1,1) PRIMARY KEY,
     email          VARCHAR(100) NOT NULL UNIQUE,
     phone          VARCHAR(15)  NOT NULL UNIQUE,
+    referral_code  VARCHAR(20) NOT NULL UNIQUE,
     full_name      NVARCHAR(100) NOT NULL,
     password_hash  VARCHAR(255) NOT NULL,
     birth_year     SMALLINT NULL,
@@ -203,22 +204,22 @@ GO
 -- 2. Tài khoản người dùng mẫu
 -- Mật khẩu hash bên dưới là mật khẩu '123456' băm theo chuẩn bcrypt
 SET IDENTITY_INSERT users ON;
-INSERT INTO users (user_id, email, phone, full_name, password_hash, birth_year, gender, province, system_role, account_status, xu_balance, referred_by, created_at) VALUES
+INSERT INTO users (user_id, email, phone, referral_code, full_name, password_hash, birth_year, gender, province, system_role, account_status, xu_balance, referred_by, created_at) VALUES
 -- Admin hệ thống
-(1, 'admin@youtubexu.vn', '0901000001', N'Nguyễn Quản Trị', '$2a$12$N9qo8uLOickgx2ZMRZoMye.I.kQ9v3wZ2P1aZ5vJ.OqUe5X.3r9yG', 1995, 'MALE', N'Hà Nội', 'ADMIN', 'ACTIVE', 0, NULL, '2026-09-01 08:00:00'),
+(1, 'admin@youtubexu.vn', '0901000001', 'YX00000001', N'Nguyễn Quản Trị', '$2a$12$N9qo8uLOickgx2ZMRZoMye.I.kQ9v3wZ2P1aZ5vJ.OqUe5X.3r9yG', 1995, 'MALE', N'Hà Nội', 'ADMIN', 'ACTIVE', 0, NULL, '2026-09-01 08:00:00'),
 
 -- Nhà quảng cáo (Advertisers)
-(2, 'adv.vng@gmail.com', '0902000001', N'Công ty Cổ phần VNG', '$2a$12$N9qo8uLOickgx2ZMRZoMye.I.kQ9v3wZ2P1aZ5vJ.OqUe5X.3r9yG', 2004, 'OTHER', N'TP.HCM', 'ADVERTISER', 'ACTIVE', 50000, NULL, '2026-09-05 09:30:00'),
-(3, 'adv.shopee@gmail.com', '0902000002', N'Shopee Việt Nam', '$2a$12$N9qo8uLOickgx2ZMRZoMye.I.kQ9v3wZ2P1aZ5vJ.OqUe5X.3r9yG', 2015, 'OTHER', N'TP.HCM', 'ADVERTISER', 'ACTIVE', 100000, NULL, '2026-09-10 10:00:00'),
-(4, 'adv.vinamilk@gmail.com', '0902000003', N'Vinamilk Corporation', '$2a$12$N9qo8uLOickgx2ZMRZoMye.I.kQ9v3wZ2P1aZ5vJ.OqUe5X.3r9yG', 1976, 'OTHER', N'TP.HCM', 'ADVERTISER', 'ACTIVE', 80000, NULL, '2026-09-15 11:00:00'),
+(2, 'adv.vng@gmail.com', '0902000001', 'YX00000002', N'Công ty Cổ phần VNG', '$2a$12$N9qo8uLOickgx2ZMRZoMye.I.kQ9v3wZ2P1aZ5vJ.OqUe5X.3r9yG', 2004, 'OTHER', N'TP.HCM', 'ADVERTISER', 'ACTIVE', 50000, NULL, '2026-09-05 09:30:00'),
+(3, 'adv.shopee@gmail.com', '0902000002', 'YX00000003', N'Shopee Việt Nam', '$2a$12$N9qo8uLOickgx2ZMRZoMye.I.kQ9v3wZ2P1aZ5vJ.OqUe5X.3r9yG', 2015, 'OTHER', N'TP.HCM', 'ADVERTISER', 'ACTIVE', 100000, NULL, '2026-09-10 10:00:00'),
+(4, 'adv.vinamilk@gmail.com', '0902000003', 'YX00000004', N'Vinamilk Corporation', '$2a$12$N9qo8uLOickgx2ZMRZoMye.I.kQ9v3wZ2P1aZ5vJ.OqUe5X.3r9yG', 1976, 'OTHER', N'TP.HCM', 'ADVERTISER', 'ACTIVE', 80000, NULL, '2026-09-15 11:00:00'),
 
 -- Người xem (Viewers)
-(5, 'long.tv@gmail.com', '0903000001', N'Trần Văn Long', '$2a$12$N9qo8uLOickgx2ZMRZoMye.I.kQ9v3wZ2P1aZ5vJ.OqUe5X.3r9yG', 2002, 'MALE', N'Hà Nội', 'VIEWER', 'ACTIVE', 1520, NULL, '2026-09-20 14:00:00'),
-(6, 'nhi.lt@gmail.com', '0903000002', N'Lê Thị Nhi', '$2a$12$N9qo8uLOickgx2ZMRZoMye.I.kQ9v3wZ2P1aZ5vJ.OqUe5X.3r9yG', 2003, 'FEMALE', N'TP.HCM', 'VIEWER', 'ACTIVE', 500, 5, '2026-09-21 15:30:00'),
-(7, 'tu.pm@gmail.com', '0903000003', N'Phạm Minh Tú', '$2a$12$N9qo8uLOickgx2ZMRZoMye.I.kQ9v3wZ2P1aZ5vJ.OqUe5X.3r9yG', 2001, 'MALE', N'Đà Nẵng', 'VIEWER', 'ACTIVE', 120, 5, '2026-09-22 16:15:00'),
-(8, 'lam.hm@gmail.com', '0903000004', N'Hoàng Mai Lâm', '$2a$12$N9qo8uLOickgx2ZMRZoMye.I.kQ9v3wZ2P1aZ5vJ.OqUe5X.3r9yG', 2000, 'FEMALE', N'Hà Nội', 'VIEWER', 'ACTIVE', 2450, NULL, '2026-09-23 09:00:00'),
-(9, 'luong.nv@gmail.com', '0903000005', N'Nguyễn Văn Lượng', '$2a$12$N9qo8uLOickgx2ZMRZoMye.I.kQ9v3wZ2P1aZ5vJ.OqUe5X.3r9yG', 2004, 'MALE', N'Cần Thơ', 'VIEWER', 'ACTIVE', 0, NULL, '2026-09-24 10:20:00'),
-(10, 'gianlan.bot@gmail.com', '0903000099', N'Tài Khoản Nghi Vấn Gian Lận', '$2a$12$N9qo8uLOickgx2ZMRZoMye.I.kQ9v3wZ2P1aZ5vJ.OqUe5X.3r9yG', 1999, 'OTHER', N'Hà Nội', 'VIEWER', 'LOCKED', 0, NULL, '2026-09-25 11:00:00');
+(5, 'long.tv@gmail.com', '0903000001', 'YX00000005', N'Trần Văn Long', '$2a$12$N9qo8uLOickgx2ZMRZoMye.I.kQ9v3wZ2P1aZ5vJ.OqUe5X.3r9yG', 2002, 'MALE', N'Hà Nội', 'VIEWER', 'ACTIVE', 1520, NULL, '2026-09-20 14:00:00'),
+(6, 'nhi.lt@gmail.com', '0903000002', 'YX00000006', N'Lê Thị Nhi', '$2a$12$N9qo8uLOickgx2ZMRZoMye.I.kQ9v3wZ2P1aZ5vJ.OqUe5X.3r9yG', 2003, 'FEMALE', N'TP.HCM', 'VIEWER', 'ACTIVE', 500, 5, '2026-09-21 15:30:00'),
+(7, 'tu.pm@gmail.com', '0903000003', 'YX00000007', N'Phạm Minh Tú', '$2a$12$N9qo8uLOickgx2ZMRZoMye.I.kQ9v3wZ2P1aZ5vJ.OqUe5X.3r9yG', 2001, 'MALE', N'Đà Nẵng', 'VIEWER', 'ACTIVE', 120, 5, '2026-09-22 16:15:00'),
+(8, 'lam.hm@gmail.com', '0903000004', 'YX00000008', N'Hoàng Mai Lâm', '$2a$12$N9qo8uLOickgx2ZMRZoMye.I.kQ9v3wZ2P1aZ5vJ.OqUe5X.3r9yG', 2000, 'FEMALE', N'Hà Nội', 'VIEWER', 'ACTIVE', 2450, NULL, '2026-09-23 09:00:00'),
+(9, 'luong.nv@gmail.com', '0903000005', 'YX00000009', N'Nguyễn Văn Lượng', '$2a$12$N9qo8uLOickgx2ZMRZoMye.I.kQ9v3wZ2P1aZ5vJ.OqUe5X.3r9yG', 2004, 'MALE', N'Cần Thơ', 'VIEWER', 'ACTIVE', 0, NULL, '2026-09-24 10:20:00'),
+(10, 'gianlan.bot@gmail.com', '0903000099', 'YX00000010', N'Tài Khoản Nghi Vấn Gian Lận', '$2a$12$N9qo8uLOickgx2ZMRZoMye.I.kQ9v3wZ2P1aZ5vJ.OqUe5X.3r9yG', 1999, 'OTHER', N'Hà Nội', 'VIEWER', 'LOCKED', 0, NULL, '2026-09-25 11:00:00');
 SET IDENTITY_INSERT users OFF;
 GO
 

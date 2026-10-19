@@ -9,7 +9,7 @@ export async function GET(request) {
     const userId = searchParams.get('userId') || '5';
 
     // 1. Số dư và thông tin ví
-    const users = await query('SELECT user_id, full_name, xu_balance, account_status FROM users WHERE user_id = ?', [userId]);
+    const users = await query('SELECT user_id, full_name, referral_code, xu_balance, account_status FROM users WHERE user_id = ?', [userId]);
     if (users.length === 0) {
       return NextResponse.json({ success: false, message: 'Người dùng không tồn tại' }, { status: 404 });
     }
@@ -24,6 +24,14 @@ export async function GET(request) {
        FROM xu_transactions 
        WHERE user_id = ?`,
       [userId]
+    );
+
+    const referralStats = await query(
+      `SELECT
+         (SELECT COUNT(*) FROM users WHERE referred_by = ?) AS invited_users,
+         (SELECT COALESCE(SUM(amount), 0) FROM xu_transactions
+          WHERE user_id = ? AND txn_type = 'BONUS' AND view_id IS NOT NULL) AS referral_bonus_xu`,
+      [userId, userId]
     );
 
     // 3. Sổ cái giao dịch
@@ -44,6 +52,11 @@ export async function GET(request) {
       balance: user.xu_balance,
       total_earned: stats[0]?.total_earned || 0,
       total_spent: stats[0]?.total_spent || 0,
+      referrals: {
+        code: user.referral_code,
+        invited_users: referralStats[0]?.invited_users || 0,
+        bonus_xu: referralStats[0]?.referral_bonus_xu || 0
+      },
       transactions
     });
   } catch (error) {

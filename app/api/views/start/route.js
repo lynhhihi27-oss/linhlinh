@@ -72,13 +72,20 @@ export async function POST(request) {
     const ip = request.headers.get('x-forwarded-for') || '127.0.0.1';
 
     const insertResult = await query(
-      `INSERT INTO ad_views (user_id, ad_id, view_token, view_date, started_at, watched_seconds, reward_xu, device_id, ip_address, view_status)
-       VALUES (?, ?, ?, ?, NOW(), 0, ?, ?, ?, 'STARTED')
-       ON DUPLICATE KEY UPDATE 
-         view_token = VALUES(view_token), 
-         started_at = NOW(), 
-         view_status = 'STARTED',
-         watched_seconds = 0`,
+      `MERGE ad_views WITH (HOLDLOCK) AS target
+       USING (
+         SELECT ? AS user_id, ? AS ad_id, ? AS view_token, ? AS view_date,
+                ? AS reward_xu, ? AS device_id, ? AS ip_address
+       ) AS source
+       ON target.user_id = source.user_id AND target.ad_id = source.ad_id AND target.view_date = source.view_date
+       WHEN MATCHED THEN
+         UPDATE SET view_token = source.view_token, started_at = NOW(),
+                    view_status = 'STARTED', watched_seconds = 0
+       WHEN NOT MATCHED THEN
+         INSERT (user_id, ad_id, view_token, view_date, started_at, watched_seconds, reward_xu, device_id, ip_address, view_status)
+         VALUES (source.user_id, source.ad_id, source.view_token, source.view_date, NOW(), 0,
+                 source.reward_xu, source.device_id, source.ip_address, 'STARTED')
+       OUTPUT INSERTED.view_id AS insertId;`,
       [user_id, ad_id, viewToken, today, ad.reward_xu, device_id || 'BROWSER_CLIENT', ip]
     );
 

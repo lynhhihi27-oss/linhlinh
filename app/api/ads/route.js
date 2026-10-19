@@ -49,11 +49,26 @@ export async function GET(request) {
       FROM ads a
       JOIN ad_categories c ON a.category_id = c.category_id
       JOIN users u ON a.advertiser_id = u.user_id
+      LEFT JOIN users viewer ON viewer.user_id = ?
       WHERE a.status = 'ACTIVE' 
         AND a.spent_xu < a.budget_xu
         AND ? BETWEEN a.start_date AND a.end_date
+        AND (
+          NOT EXISTS (
+            SELECT 1 FROM ad_targeting unrestricted
+            WHERE unrestricted.ad_id = a.ad_id
+              AND (unrestricted.age_from IS NOT NULL OR unrestricted.age_to IS NOT NULL)
+          )
+          OR EXISTS (
+            SELECT 1 FROM ad_targeting age_target
+            WHERE age_target.ad_id = a.ad_id
+              AND viewer.birth_year IS NOT NULL
+              AND (age_target.age_from IS NULL OR YEAR(GETDATE()) - viewer.birth_year >= age_target.age_from)
+              AND (age_target.age_to IS NULL OR YEAR(GETDATE()) - viewer.birth_year <= age_target.age_to)
+          )
+        )
     `;
-    const params = [userId, today, today];
+    const params = [userId, today, userId, today];
 
     if (categoryId) {
       sql += ' AND a.category_id = ?';
@@ -104,6 +119,16 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: 'Ngân sách chiến dịch phải lớn hơn 0 xu!' }, { status: 400 });
     }
 
+    const ageFrom = target_age_from === '' || target_age_from == null ? null : Number(target_age_from);
+    const ageTo = target_age_to === '' || target_age_to == null ? null : Number(target_age_to);
+    if (
+      (ageFrom !== null && (!Number.isInteger(ageFrom) || ageFrom < 16 || ageFrom > 120)) ||
+      (ageTo !== null && (!Number.isInteger(ageTo) || ageTo < 16 || ageTo > 120)) ||
+      (ageFrom !== null && ageTo !== null && ageFrom > ageTo)
+    ) {
+      return NextResponse.json({ success: false, message: 'Độ tuổi mục tiêu phải nằm trong khoảng 16-120 và tuổi tối thiểu không vượt quá tuổi tối đa!' }, { status: 400 });
+    }
+
     if (new Date(end_date) < new Date(start_date)) {
       return NextResponse.json({ success: false, message: 'Ngày kết thúc không được nhỏ hơn ngày bắt đầu!' }, { status: 400 });
     }
@@ -126,11 +151,11 @@ export async function POST(request) {
     const newAdId = result.insertId;
 
     // Lưu cấu hình đối tượng mục tiêu (ad_targeting)
-    if (target_gender || target_age_from || target_age_to || target_province) {
+    if (target_gender || ageFrom !== null || ageTo !== null || target_province) {
       await query(
         `INSERT INTO ad_targeting (ad_id, gender, age_from, age_to, province)
          VALUES (?, ?, ?, ?, ?)`,
-        [newAdId, target_gender || null, target_age_from || null, target_age_to || null, target_province || null]
+        [newAdId, target_gender || null, ageFrom, ageTo, target_province || null]
       );
     }
 

@@ -14,6 +14,7 @@ export async function GET(request) {
         user: {
           user_id: 0,
           full_name: 'Khách vãng lai',
+          referral_code: null,
           email: '',
           phone: '',
           system_role: 'GUEST',
@@ -24,7 +25,7 @@ export async function GET(request) {
     }
 
     const users = await query(
-      'SELECT user_id, email, phone, full_name, birth_year, gender, province, system_role, account_status, xu_balance, referred_by, created_at FROM users WHERE user_id = ?',
+      'SELECT user_id, email, phone, referral_code, full_name, birth_year, gender, province, system_role, account_status, xu_balance, referred_by, created_at FROM users WHERE user_id = ?',
       [userId]
     );
 
