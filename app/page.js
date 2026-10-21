@@ -7,6 +7,30 @@ import {
   Copy, ExternalLink, RefreshCw, Filter, Sparkles, Award, ArrowUpRight, ArrowDownLeft
 } from 'lucide-react';
 
+const adStatusLabels = {
+  DRAFT: 'Bản nháp',
+  PENDING: 'Chờ duyệt',
+  ACTIVE: 'Đang chạy',
+  PAUSED: 'Đã tạm dừng',
+  ENDED: 'Đã kết thúc',
+  REJECTED: 'Bị từ chối'
+};
+
+const redemptionStatusLabels = {
+  PENDING: 'Chờ xử lý',
+  APPROVED: 'Đã duyệt',
+  DELIVERED: 'Đã gửi mã',
+  REJECTED: 'Đã từ chối'
+};
+
+const transactionTypeLabels = {
+  EARN: 'Nhận Xu',
+  REDEEM: 'Đổi quà',
+  REFUND: 'Hoàn Xu',
+  BONUS: 'Thưởng',
+  ADJUST: 'Điều chỉnh'
+};
+
 export default function YouTubeXuApp() {
   // Current active user & role
   const [currentUser, setCurrentUser] = useState(null);
@@ -520,6 +544,12 @@ export default function YouTubeXuApp() {
         ads: ads.filter(ad => String(ad.category_id) === String(category.category_id))
       }))
       .filter(category => category.ads.length > 0);
+  const roleLabel = {
+    ADMIN: 'Quản trị viên',
+    ADVERTISER: 'Nhà quảng cáo',
+    VIEWER: 'Người xem',
+    GUEST: 'Khách'
+  }[currentUser?.system_role || 'GUEST'];
 
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
@@ -550,7 +580,7 @@ export default function YouTubeXuApp() {
 
       {/* HEADER / TOP NAVBAR */}
       <header style={{
-        background: 'rgba(18, 18, 23, 0.85)',
+        background: 'rgba(11, 15, 25, 0.88)',
         borderBottom: '1px solid var(--border-subtle)',
         backdropFilter: 'blur(16px)',
         position: 'sticky',
@@ -578,7 +608,7 @@ export default function YouTubeXuApp() {
                 YouTube <span style={{ color: '#ff0033' }}>Xu</span>
               </div>
               <div style={{ fontSize: '0.68rem', color: 'var(--text-dim)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Sprint 1 • 3NF Platform
+                Nền tảng quảng cáo & đổi thưởng
               </div>
             </div>
           </button>
@@ -716,53 +746,40 @@ export default function YouTubeXuApp() {
       </header>
 
       {/* SUB-BANNER / HERO */}
-      <div style={{
-        background: 'linear-gradient(180deg, rgba(255, 0, 51, 0.06) 0%, transparent 100%)',
-        borderBottom: '1px solid var(--border-subtle)',
-        padding: '24px 0'
-      }}>
-        <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '16px' }}>
-          <div>
-            <h1 style={{ fontSize: '1.5rem', fontWeight: 800, display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span>Chào mừng</span>
-              <span style={{ color: '#fff' }}>{currentUser?.full_name || 'Quý khách'}</span>
-              <span className={`badge ${currentUser?.account_status === 'LOCKED' ? 'badge-red' : 'badge-green'}`}>
-                {currentUser?.account_status === 'LOCKED' ? 'Tài khoản bị khóa' : (currentUser?.system_role || 'GUEST')}
-              </span>
+      <section className="site-hero">
+        <div className="container site-hero-content">
+          <div className="hero-copy">
+            <span className="hero-eyebrow"><Sparkles size={14} /> NỀN TẢNG YOUTUBE XU</span>
+            <h1 className="hero-title">
+              <span>{currentUser ? 'Chào mừng' : 'Khám phá'}</span>
+              <span className="hero-user-name">{currentUser?.full_name || 'YouTube Xu'}</span>
+              {currentUser && (
+                <span className={`badge ${currentUser.account_status === 'LOCKED' ? 'badge-red' : 'badge-green'}`}>
+                  {currentUser.account_status === 'LOCKED' ? 'Tài khoản bị khóa' : roleLabel}
+                </span>
+              )}
             </h1>
-            <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginTop: '4px' }}>
-              {activeTab === 'watch' && 'Danh sách chiến dịch đang hoạt động. Nhận Xu đang tạm khóa cho đến khi được tích hợp xác minh lượt phát quảng cáo từ nhà cung cấp.'}
-              {activeTab === 'rewards' && 'Gửi yêu cầu đổi quà; Xu và tồn kho chỉ được trừ khi yêu cầu hợp lệ, mã quà cần được quản trị viên xác nhận từ nhà cung cấp.'}
-              {activeTab === 'wallet' && 'Sổ cái kiểm toán biến động xu chuẩn 3NF: EARN, REDEEM, REFUND, BONUS, ADJUST.'}
-              {activeTab === 'advertiser' && 'Khởi tạo chiến dịch video YouTube, thiết lập ngân sách và bộ lọc khách hàng mục tiêu.'}
-              {activeTab === 'admin' && 'Bảng điều khiển quản trị: Kiểm duyệt quảng cáo, duyệt đơn đổi thưởng > 50k, chống gian lận.'}
+            <p className="hero-description">
+              {activeTab === 'watch' && 'Khám phá các chiến dịch video theo danh mục. Tính năng nhận Xu sẽ mở khi hệ thống xác minh lượt xem được tích hợp.'}
+              {activeTab === 'rewards' && 'Chọn phần quà bạn muốn đổi. Yêu cầu sẽ được xử lý sau khi quản trị viên xác nhận mã quà từ nhà cung cấp.'}
+              {activeTab === 'wallet' && 'Theo dõi số dư và lịch sử cộng, sử dụng hoặc điều chỉnh Xu trong ví của bạn.'}
+              {activeTab === 'advertiser' && 'Tạo chiến dịch video, thiết lập ngân sách và chọn nhóm khách hàng mục tiêu.'}
+              {activeTab === 'admin' && 'Quản lý chiến dịch, yêu cầu đổi quà và hoạt động của tài khoản.'}
             </p>
           </div>
 
-          <div style={{ display: 'flex', gap: '10px' }}>
-            <div style={{
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-subtle)',
-              padding: '8px 16px',
-              borderRadius: 'var(--radius-md)',
-              textAlign: 'center'
-            }}>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontWeight: 600 }}>TỶ LỆ QUY ĐỔI</div>
-              <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#f59e0b' }}>1.000 Xu = 10.000đ</div>
+          <div className="hero-metrics">
+            <div className="hero-metric hero-metric-gold">
+              <span className="hero-metric-label">TỶ LỆ QUY ĐỔI</span>
+              <strong>1.000 Xu = 10.000đ</strong>
             </div>
-            <div style={{
-              background: 'var(--bg-surface)',
-              border: '1px solid var(--border-subtle)',
-              padding: '8px 16px',
-              borderRadius: 'var(--radius-md)',
-              textAlign: 'center'
-            }}>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontWeight: 600 }}>XÁC MINH LƯỢT XEM</div>
-              <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#fcd34d' }}>Chưa tích hợp</div>
+            <div className="hero-metric hero-metric-blue">
+              <span className="hero-metric-label">XÁC MINH LƯỢT XEM</span>
+              <strong>Đang hoàn thiện</strong>
             </div>
           </div>
         </div>
-      </div>
+      </section>
 
       {/* MAIN CONTENT AREA */}
       <main className="container" style={{ flex: 1, padding: '32px 20px' }}>
@@ -773,22 +790,22 @@ export default function YouTubeXuApp() {
         {activeTab === 'watch' && (
           <div>
             {/* Filter by Category */}
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '12px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflowX: 'auto', paddingBottom: '4px' }}>
+            <div className="category-toolbar">
+              <div className="category-filters">
                 <button
-                  className="btn btn-sm"
+                  className={`btn btn-sm category-filter${selectedCategory === '' ? ' is-selected' : ''}`}
                   style={{
                     background: selectedCategory === '' ? 'var(--primary)' : 'var(--bg-surface-elevated)',
                     color: selectedCategory === '' ? '#fff' : 'var(--text-muted)'
                   }}
                   onClick={() => setSelectedCategory('')}
                 >
-                  Tất cả danh mục
+                  Tất cả
                 </button>
                 {categories.map(cat => (
                   <button
                     key={cat.category_id}
-                    className="btn btn-sm"
+                    className={`btn btn-sm category-filter${selectedCategory === cat.category_id.toString() ? ' is-selected' : ''}`}
                     style={{
                       background: selectedCategory === cat.category_id.toString() ? 'var(--primary)' : 'var(--bg-surface-elevated)',
                       color: selectedCategory === cat.category_id.toString() ? '#fff' : 'var(--text-muted)'
@@ -800,14 +817,14 @@ export default function YouTubeXuApp() {
                 ))}
               </div>
 
-              <button className="btn btn-secondary btn-sm" onClick={loadAds}>
+              <button className="btn btn-secondary btn-sm refresh-button" onClick={loadAds}>
                 <RefreshCw size={14} /> Làm mới
               </button>
             </div>
 
-            <div className="glass-panel" role="note" style={{ padding: '14px 18px', marginBottom: '20px', borderColor: 'rgba(245, 158, 11, 0.35)', color: 'var(--text-muted)' }}>
-              <strong style={{ color: '#fcd34d' }}>Nhận Xu tạm thời chưa khả dụng.</strong>{' '}
-              Ứng dụng chưa tích hợp xác minh lượt phát quảng cáo từ nhà cung cấp, vì vậy không ghi nhận lượt xem hoặc cộng Xu chỉ dựa trên bộ đếm thời gian.
+            <div className="glass-panel watch-notice" role="note">
+              <strong>Tính năng nhận Xu đang được hoàn thiện.</strong>{' '}
+              Hệ thống chưa xác minh được lượt xem với nhà cung cấp, nên hiện chưa ghi nhận lượt xem hoặc cộng Xu.
             </div>
 
             {/* Ads Grid */}
@@ -827,22 +844,22 @@ export default function YouTubeXuApp() {
                 <Coins size={48} color="var(--text-dim)" style={{ margin: '0 auto 16px' }} />
                 <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>Không có quảng cáo nào phù hợp lúc này</h3>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '6px' }}>
-                  Vui lòng chọn danh mục khác hoặc quay lại sau khi nhà quảng cáo cập nhật chiến dịch!
+                  Hãy chọn danh mục khác hoặc quay lại sau khi có chiến dịch mới.
                 </p>
               </div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+              <div className="ad-groups">
                 {displayedAdGroups.map(group => (
-                  <section key={group.category_id} aria-labelledby={`category-${group.category_id}`}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-                      <h2 id={`category-${group.category_id}`} style={{ fontSize: '1.15rem', fontWeight: 800 }}>
+                  <section className="ad-group" key={group.category_id} aria-labelledby={`category-${group.category_id}`}>
+                    <div className="ad-group-heading">
+                      <h2 id={`category-${group.category_id}`}>
                         {group.category_name}
                       </h2>
                       <span className="badge badge-blue">{group.ads.length} video</span>
                     </div>
-                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '22px' }}>
+                    <div className="ad-grid">
                       {group.ads.map(ad => (
-                        <div key={ad.ad_id} className="glass-panel" style={{
+                        <div key={ad.ad_id} className="glass-panel ad-card" style={{
                           display: 'flex',
                           flexDirection: 'column',
                           overflow: 'hidden',
@@ -911,7 +928,7 @@ export default function YouTubeXuApp() {
                           <Clock size={14} color="#94a3b8" /> {ad.duration_sec} giây
                         </span>
                         <span>•</span>
-                        <span>Nhà QC: <strong>{ad.advertiser_name || 'VNG / Shopee'}</strong></span>
+                        <span>Nhà quảng cáo: <strong>{ad.advertiser_name || 'Chưa cập nhật'}</strong></span>
                       </div>
 
                       <div style={{ marginTop: 'auto', paddingTop: '14px', borderTop: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1082,7 +1099,7 @@ export default function YouTubeXuApp() {
                                 r.status === 'APPROVED' || r.status === 'DELIVERED' ? 'badge-green' :
                                 r.status === 'PENDING' ? 'badge-gold' : 'badge-red'
                               }`}>
-                                {r.status}
+                                {redemptionStatusLabels[r.status] || r.status}
                               </span>
                             </td>
                           </tr>
@@ -1158,7 +1175,7 @@ export default function YouTubeXuApp() {
                 <div>
                   <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>Sổ Cái Biến Động Xu (xu_transactions)</h3>
                   <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                    Bảng kê chi tiết kiểm toán mọi giao dịch xu chuẩn 3NF, đối soát với số dư tức thời.
+                    Lịch sử ghi lại mọi lần nhận, sử dụng và điều chỉnh Xu trong ví.
                   </p>
                 </div>
                 <button className="btn btn-secondary btn-sm" onClick={loadWallet}>
@@ -1194,7 +1211,7 @@ export default function YouTubeXuApp() {
                               t.txn_type === 'REDEEM' ? 'badge-gold' :
                               t.txn_type === 'REFUND' ? 'badge-blue' : 'badge-red'
                             }`}>
-                              {t.txn_type}
+                              {transactionTypeLabels[t.txn_type] || t.txn_type}
                             </span>
                           </td>
                           <td style={{
@@ -1232,7 +1249,7 @@ export default function YouTubeXuApp() {
                 <PlusCircle size={20} color="#3b82f6" /> Tạo Chiến Dịch Quảng Cáo
               </h3>
               <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '20px' }}>
-                Theo Use Case UC-04: Khởi tạo quảng cáo, ngân sách xu và phân nhóm đối tượng mục tiêu.
+                Tạo chiến dịch video, cài đặt ngân sách và lựa chọn nhóm khách hàng mục tiêu.
               </p>
 
               <form onSubmit={handleCreateCampaign}>
@@ -1396,7 +1413,7 @@ export default function YouTubeXuApp() {
                 </div>
 
                 <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '20px' }}>
-                  Gửi Phê Duyệt Chiến Dịch (PENDING)
+                  Gửi chiến dịch để xét duyệt
                 </button>
               </form>
             </div>
@@ -1428,7 +1445,7 @@ export default function YouTubeXuApp() {
                           item.status === 'PENDING' ? 'badge-gold' :
                           item.status === 'ENDED' ? 'badge-blue' : 'badge-red'
                         }`}>
-                          {item.status}
+                          {adStatusLabels[item.status] || item.status}
                         </span>
                       </div>
 
@@ -1468,23 +1485,23 @@ export default function YouTubeXuApp() {
                 <div className="glass-panel" style={{ padding: '18px' }}>
                   <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', fontWeight: 600 }}>TỔNG NGƯỜI DÙNG</div>
                   <div style={{ fontSize: '1.8rem', fontWeight: 800, marginTop: '6px' }}>{adminStats.users?.total_users}</div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{adminStats.users?.total_viewers} Người xem • {adminStats.users?.total_advertisers} Nhà QC</div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{adminStats.users?.total_viewers} người xem • {adminStats.users?.total_advertisers} nhà quảng cáo</div>
                 </div>
 
                 <div className="glass-panel" style={{ padding: '18px' }}>
                   <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', fontWeight: 600 }}>CHIẾN DỊCH QUẢNG CÁO</div>
                   <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#60a5fa', marginTop: '6px' }}>{adminStats.ads?.total_ads}</div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{adminStats.ads?.active_ads} Active • {adminStats.ads?.pending_ads} Chờ duyệt</div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{adminStats.ads?.active_ads} đang chạy • {adminStats.ads?.pending_ads} chờ duyệt</div>
                 </div>
 
                 <div className="glass-panel" style={{ padding: '18px' }}>
                   <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', fontWeight: 600 }}>TỔNG LƯỢT XEM VIDEO</div>
                   <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#34d399', marginTop: '6px' }}>{adminStats.views?.total_views}</div>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{adminStats.views?.completed_views} Hoàn tất • {adminStats.views?.invalid_views} Nghi vấn</div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>{adminStats.views?.completed_views} hoàn tất • {adminStats.views?.invalid_views} không hợp lệ</div>
                 </div>
 
                 <div className="glass-panel" style={{ padding: '18px' }}>
-                  <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', fontWeight: 600 }}>XU LƯU HÀNH & ĐÃ ĐỔI</div>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--text-dim)', fontWeight: 600 }}>TỔNG XU TRONG HỆ THỐNG</div>
                   <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#fcd34d', marginTop: '6px' }}>{adminStats.users?.total_circulating_xu?.toLocaleString()}</div>
                   <div style={{ fontSize: '0.78rem', color: 'var(--text-muted)' }}>Đã đổi: {adminStats.redemptions?.total_redeemed_xu?.toLocaleString()} xu</div>
                 </div>
@@ -1492,12 +1509,12 @@ export default function YouTubeXuApp() {
             )}
 
             {/* Admin Grid: 2 Cột */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '26px' }}>
+            <div className="admin-review-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '26px' }}>
               
-              {/* Cột 1: Phê Duyệt Quảng Cáo (UC-05) */}
+              {/* Cột 1: Duyệt chiến dịch quảng cáo */}
               <div className="glass-panel" style={{ padding: '22px' }}>
                 <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <CheckCircle2 size={18} color="#10b981" /> Phê Duyệt Quảng Cáo (UC-05)
+                  <CheckCircle2 size={18} color="#10b981" /> Duyệt chiến dịch quảng cáo
                 </h3>
                 
                 {adminAds.filter(a => a.status === 'PENDING').length === 0 ? (
@@ -1517,11 +1534,11 @@ export default function YouTubeXuApp() {
                         </div>
                         <h4 style={{ fontSize: '0.98rem', fontWeight: 700, marginBottom: '4px' }}>{ad.title}</h4>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
-                          Nhà QC: <strong>{ad.advertiser_name}</strong> • {ad.duration_sec}s • Ngân sách: {ad.budget_xu} xu
+                          Nhà quảng cáo: <strong>{ad.advertiser_name}</strong> • {ad.duration_sec} giây • Ngân sách: {ad.budget_xu.toLocaleString()} xu
                         </div>
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <div className="admin-action-buttons" style={{ display: 'flex', gap: '8px' }}>
                           <button className="btn btn-primary btn-sm" onClick={() => handleReviewAd(ad.ad_id, 'ACTIVE')}>
-                            ✓ Phê duyệt (ACTIVE)
+                            ✓ Phê duyệt chiến dịch
                           </button>
                           <button className="btn btn-secondary btn-sm" onClick={() => {
                             const reason = prompt('Nhập lý do từ chối:', 'Nội dung không phù hợp quy định');
@@ -1554,14 +1571,14 @@ export default function YouTubeXuApp() {
                         border: '1px solid var(--border-subtle)'
                       }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                          <span className="badge badge-gold">PENDING DUYỆT</span>
+                          <span className="badge badge-gold">CHỜ DUYỆT</span>
                           <span style={{ fontSize: '0.8rem', color: '#f59e0b', fontWeight: 700 }}>{r.xu_spent} xu</span>
                         </div>
                         <h4 style={{ fontSize: '0.98rem', fontWeight: 700, marginBottom: '4px' }}>{r.reward_name}</h4>
                         <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '12px' }}>
                           Người đổi: <strong>{r.full_name}</strong> ({r.email})
                         </div>
-                        <div style={{ display: 'flex', gap: '8px' }}>
+                        <div className="admin-action-buttons" style={{ display: 'flex', gap: '8px' }}>
                           <button className="btn btn-primary btn-sm" onClick={() => handleProcessRedemption(r.redemption_id, 'APPROVE')}>
                             ✓ Xác nhận mã quà thực tế
                           </button>
@@ -1577,15 +1594,15 @@ export default function YouTubeXuApp() {
 
             </div>
 
-            {/* Giám Sát Chống Gian Lận (UC-06) */}
+            {/* Giám sát và xử lý tài khoản */}
             <div className="glass-panel" style={{ padding: '24px', marginTop: '26px' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
                 <div>
                   <h3 style={{ fontSize: '1.2rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <ShieldAlert size={20} color="#ff0033" /> Phát Hiện Gian Lận & Xử Lý Tài Khoản (UC-06)
+                    <ShieldAlert size={20} color="#ff0033" /> Giám sát hoạt động bất thường
                   </h3>
                   <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-                    Cảnh báo tài khoản có lượt xem INVALID, bot tự động hoặc tua video để thu hồi xu (ADJUST) và khóa tài khoản.
+                    Tài khoản có lượt xem không hợp lệ sẽ được kiểm tra để xử lý số dư hoặc tạm khóa.
                   </p>
                 </div>
                 <button className="btn btn-secondary btn-sm" onClick={loadAdminData}>
@@ -1597,10 +1614,10 @@ export default function YouTubeXuApp() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-muted)' }}>
-                      <th style={{ padding: '12px' }}>User ID</th>
+                      <th style={{ padding: '12px' }}>Mã người dùng</th>
                       <th style={{ padding: '12px' }}>Họ tên & Email</th>
                       <th style={{ padding: '12px' }}>Số dư ví</th>
-                      <th style={{ padding: '12px' }}>Lượt xem Invalid</th>
+                      <th style={{ padding: '12px' }}>Lượt xem không hợp lệ</th>
                       <th style={{ padding: '12px' }}>Trạng thái</th>
                       <th style={{ padding: '12px' }}>Hành động xử lý</th>
                     </tr>
@@ -1615,15 +1632,15 @@ export default function YouTubeXuApp() {
                         </td>
                         <td style={{ padding: '12px', fontWeight: 700, color: '#f59e0b' }}>{u.xu_balance} xu</td>
                         <td style={{ padding: '12px', color: u.invalid_views > 0 ? '#f43f5e' : 'var(--text-dim)', fontWeight: 700 }}>
-                          {u.invalid_views} lượt nghi vấn
+                          {u.invalid_views} lượt không hợp lệ
                         </td>
                         <td style={{ padding: '12px' }}>
                           <span className={`badge ${u.account_status === 'LOCKED' ? 'badge-red' : 'badge-green'}`}>
-                            {u.account_status}
+                            {u.account_status === 'LOCKED' ? 'Đã khóa' : 'Đang hoạt động'}
                           </span>
                         </td>
                         <td style={{ padding: '12px' }}>
-                          <div style={{ display: 'flex', gap: '8px' }}>
+                          <div className="admin-action-buttons" style={{ display: 'flex', gap: '8px' }}>
                             <button 
                               className={`btn btn-sm ${u.account_status === 'LOCKED' ? 'btn-secondary' : 'btn-primary'}`}
                               onClick={() => handleToggleLockUser(u.user_id)}
@@ -1871,23 +1888,16 @@ export default function YouTubeXuApp() {
       )}
 
       {/* FOOTER */}
-      {/* <footer style={{
-        background: 'var(--bg-surface)',
-        borderTop: '1px solid var(--border-subtle)',
-        padding: '24px 0',
-        marginTop: 'auto',
-        fontSize: '0.82rem',
-        color: 'var(--text-dim)'
-      }}>
-        <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: '12px' }}>
+      <footer className="site-footer">
+        <div className="container site-footer-content">
           <div>
-            <strong>YouTube Xu</strong> • Dự án Sprint 1 (DB-01, DB-02, DB-03, SYS-01, SYS-02).
+            <strong>YouTube Xu</strong>
           </div>
           <div>
-            Cơ sở dữ liệu MySQL XAMPP • Kiến trúc 3NF • Next.js Fullstack
+            Nền tảng chiến dịch video và đổi thưởng
           </div>
         </div>
-      </footer> */}
+      </footer>
 
     </div>
   );
