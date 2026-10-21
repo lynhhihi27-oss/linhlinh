@@ -49,6 +49,10 @@ export default function YouTubeXuApp() {
   const [rewardsError, setRewardsError] = useState('');
   const [redemptions, setRedemptions] = useState([]);
   const [redeemingRewardId, setRedeemingRewardId] = useState(null);
+  const [rewardToConfirm, setRewardToConfirm] = useState(null);
+  const [redemptionToApprove, setRedemptionToApprove] = useState(null);
+  const [giftCodeInput, setGiftCodeInput] = useState('');
+  const [isProcessingRedemption, setIsProcessingRedemption] = useState(false);
   const redemptionRequestKeys = useRef(new Map());
   const activeRedemption = useRef(false);
   const [walletData, setWalletData] = useState({
@@ -258,8 +262,7 @@ export default function YouTubeXuApp() {
   }, [currentUser, activeTab, loadAds, loadAdminData, loadAdvertiserAds, loadRedemptions, loadWallet]);
 
   // Đổi quà (UC-02)
-  const handleRedeem = async (reward) => {
-    if (activeRedemption.current) return;
+  const handleRedeem = (reward) => {
     if (!currentUser) {
       setShowLoginModal(true);
       return;
@@ -269,10 +272,12 @@ export default function YouTubeXuApp() {
       return;
     }
 
-    if (!confirm(`Bạn có chắc chắn muốn dùng ${reward.xu_cost} xu để đổi lấy "${reward.reward_name}" không?`)) {
-      return;
-    }
+    setRewardToConfirm(reward);
+  };
 
+  const confirmRewardRedemption = async () => {
+    const reward = rewardToConfirm;
+    if (!reward || activeRedemption.current) return;
     const rewardId = Number(reward.reward_id);
     const requestStorageKey = `youtube-xu:redeem:${currentUser.user_id}:${rewardId}`;
     let requestKey = redemptionRequestKeys.current.get(requestStorageKey);
@@ -315,6 +320,7 @@ export default function YouTubeXuApp() {
         loadRewards();
         loadRedemptions();
         setRewardSubTab('my-gifts');
+        setRewardToConfirm(null);
       } else {
         showToast(data.message, 'error');
       }
@@ -387,13 +393,12 @@ export default function YouTubeXuApp() {
   };
 
   // UC-AD04: Admin duyệt đơn đổi quà lớn
-  const handleProcessRedemption = async (redemptionId, action) => {
-    let giftCode;
-    if (action === 'APPROVE') {
-      giftCode = prompt('Nhập mã quà thực tế do nhà cung cấp cấp:');
-      if (!giftCode?.trim()) return;
+  const handleProcessRedemption = async (redemptionId, action, giftCode = '') => {
+    if (action === 'APPROVE' && !giftCode.trim()) {
+      showToast('Vui lòng nhập mã quà thực tế từ nhà cung cấp.', 'error');
+      return;
     }
-
+    setIsProcessingRedemption(true);
     try {
       const res = await fetch(`/api/redemptions/${redemptionId}/process`, {
         method: 'PATCH',
@@ -403,6 +408,8 @@ export default function YouTubeXuApp() {
       const data = await res.json();
       if (data.success) {
         showToast(data.message, 'success');
+        setRedemptionToApprove(null);
+        setGiftCodeInput('');
         loadRedemptions();
         loadAdminData();
       } else {
@@ -411,6 +418,8 @@ export default function YouTubeXuApp() {
     } catch (err) {
       console.error(err);
       showToast('Lỗi khi xử lý đơn!', 'error');
+    } finally {
+      setIsProcessingRedemption(false);
     }
   };
 
@@ -1579,7 +1588,10 @@ export default function YouTubeXuApp() {
                           Người đổi: <strong>{r.full_name}</strong> ({r.email})
                         </div>
                         <div className="admin-action-buttons" style={{ display: 'flex', gap: '8px' }}>
-                          <button className="btn btn-primary btn-sm" onClick={() => handleProcessRedemption(r.redemption_id, 'APPROVE')}>
+                          <button className="btn btn-primary btn-sm" onClick={() => {
+                            setRedemptionToApprove(r);
+                            setGiftCodeInput('');
+                          }}>
                             ✓ Xác nhận mã quà thực tế
                           </button>
                           <button className="btn btn-secondary btn-sm" onClick={() => handleProcessRedemption(r.redemption_id, 'REJECT')}>
@@ -1882,6 +1894,84 @@ export default function YouTubeXuApp() {
               <button type="submit" className="btn btn-primary" style={{ width: '100%', marginTop: '10px' }}>
                 Đăng Ký & Nhận Thưởng
               </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {rewardToConfirm && (
+        <div className="modal-overlay">
+          <div className="modal-box" role="dialog" aria-modal="true" aria-labelledby="redeem-confirm-heading" style={{ maxWidth: '460px' }}>
+            <div style={{ padding: '20px', borderBottom: '1px solid var(--border-subtle)' }}>
+              <h3 id="redeem-confirm-heading" style={{ fontSize: '1.2rem', fontWeight: 700 }}>Xác nhận đổi quà</h3>
+            </div>
+            <div style={{ padding: '20px' }}>
+              <p style={{ color: 'var(--text-muted)', marginBottom: '8px' }}>
+                Bạn muốn dùng <strong>{rewardToConfirm.xu_cost?.toLocaleString()} xu</strong> để đổi:
+              </p>
+              <p style={{ fontWeight: 700, marginBottom: '20px' }}>{rewardToConfirm.reward_name}?</p>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button type="button" className="btn btn-secondary" onClick={() => setRewardToConfirm(null)}>
+                  Hủy
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-gold"
+                  onClick={confirmRewardRedemption}
+                  disabled={redeemingRewardId !== null}
+                >
+                  {redeemingRewardId !== null ? 'Đang gửi yêu cầu...' : 'Xác nhận đổi'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {redemptionToApprove && (
+        <div className="modal-overlay">
+          <div className="modal-box" role="dialog" aria-modal="true" aria-labelledby="gift-code-heading" style={{ maxWidth: '480px' }}>
+            <div style={{ padding: '20px', borderBottom: '1px solid var(--border-subtle)' }}>
+              <h3 id="gift-code-heading" style={{ fontSize: '1.2rem', fontWeight: 700 }}>Nhập mã quà thực tế</h3>
+            </div>
+            <form
+              onSubmit={(event) => {
+                event.preventDefault();
+                handleProcessRedemption(redemptionToApprove.redemption_id, 'APPROVE', giftCodeInput.trim());
+              }}
+              style={{ padding: '20px' }}
+            >
+              <p style={{ color: 'var(--text-muted)', marginBottom: '14px' }}>
+                Đơn #{redemptionToApprove.redemption_id} · {redemptionToApprove.reward_name} · {redemptionToApprove.full_name}
+              </p>
+              <div className="form-group">
+                <label className="form-label" htmlFor="redemption-gift-code">Mã do nhà cung cấp cấp *</label>
+                <input
+                  id="redemption-gift-code"
+                  className="form-input"
+                  value={giftCodeInput}
+                  onChange={(event) => setGiftCodeInput(event.target.value)}
+                  maxLength={50}
+                  autoFocus
+                  required
+                />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  onClick={() => {
+                    setRedemptionToApprove(null);
+                    setGiftCodeInput('');
+                  }}
+                  disabled={isProcessingRedemption}
+                >
+                  Hủy
+                </button>
+                <button type="submit" className="btn btn-primary" disabled={isProcessingRedemption || !giftCodeInput.trim()}>
+                  {isProcessingRedemption ? 'Đang xử lý...' : 'Xác nhận cấp mã'}
+                </button>
+              </div>
             </form>
           </div>
         </div>
