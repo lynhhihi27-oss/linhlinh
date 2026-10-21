@@ -7,6 +7,6 @@ export async function GET() {
     return NextResponse.json({ success: true, categories });
   } catch (error) {
     console.error('Categories error:', error);
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: 'Không thể tải danh mục lúc này.' }, { status: 500 });
   }
 }

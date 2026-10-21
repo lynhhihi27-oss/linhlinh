@@ -7,6 +7,9 @@ export async function POST(request) {
   try {
     assertSessionConfig();
     const body = await request.json();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ success: false, message: 'Dữ liệu đăng ký không hợp lệ.' }, { status: 400 });
+    }
     const { email, phone, full_name, password, birth_year, gender, province, referral_code } = body;
 
     if (
@@ -16,8 +19,30 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: 'Vui lòng điền đầy đủ các thông tin bắt buộc!' }, { status: 400 });
     }
 
-    if (password.length < 8) {
-      return NextResponse.json({ success: false, message: 'Mật khẩu phải có ít nhất 8 ký tự.' }, { status: 400 });
+    const normalizedEmail = email.trim().toLowerCase();
+    const normalizedPhone = phone.trim();
+    const normalizedName = full_name.trim();
+    if (
+      normalizedEmail.length > 100 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail) ||
+      !/^\+?\d{9,15}$/.test(normalizedPhone) || normalizedName.length > 100
+    ) {
+      return NextResponse.json({ success: false, message: 'Email, số điện thoại hoặc họ tên không hợp lệ.' }, { status: 400 });
+    }
+
+    if (password.length < 8 || password.length > 128) {
+      return NextResponse.json({ success: false, message: 'Mật khẩu phải có từ 8 đến 128 ký tự.' }, { status: 400 });
+    }
+
+    if (!['MALE', 'FEMALE', 'OTHER'].includes(gender)) {
+      return NextResponse.json({ success: false, message: 'Giới tính không hợp lệ.' }, { status: 400 });
+    }
+
+    if (province !== undefined && province !== null && (typeof province !== 'string' || province.trim().length > 50)) {
+      return NextResponse.json({ success: false, message: 'Tỉnh/thành phố không hợp lệ.' }, { status: 400 });
+    }
+
+    if (referral_code !== undefined && referral_code !== null && typeof referral_code !== 'string') {
+      return NextResponse.json({ success: false, message: 'Mã giới thiệu không hợp lệ.' }, { status: 400 });
     }
 
     const currentYear = new Date().getFullYear();
@@ -29,7 +54,7 @@ export async function POST(request) {
     // Kiểm tra trùng lặp email hoặc SĐT
     const existing = await query(
       'SELECT user_id FROM users WHERE email = ? OR phone = ? LIMIT 1',
-      [email, phone]
+      [normalizedEmail, normalizedPhone]
     );
 
     if (existing.length > 0) {
@@ -55,7 +80,7 @@ export async function POST(request) {
     const result = await query(
       `INSERT INTO users (email, phone, referral_code, full_name, password_hash, birth_year, gender, province, system_role, account_status, xu_balance, referred_by, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'VIEWER', 'ACTIVE', 0, ?, NOW())`,
-      [email, phone, newReferralCode, full_name, passwordHash, birthYear, gender || 'OTHER', province || null, referredBy]
+      [normalizedEmail, normalizedPhone, newReferralCode, normalizedName, passwordHash, birthYear, gender, province?.trim() || null, referredBy]
     );
 
     const newUserId = result.insertId;
@@ -77,6 +102,6 @@ export async function POST(request) {
     return response;
   } catch (error) {
     console.error('Register API error:', error);
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: 'Không thể đăng ký lúc này. Vui lòng thử lại sau.' }, { status: 500 });
   }
 }

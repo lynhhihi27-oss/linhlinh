@@ -9,6 +9,6 @@ export async function GET(request) {
     return NextResponse.json({ success: true, user });
   } catch (error) {
     console.error('API me error:', error);
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: 'Không thể tải thông tin tài khoản lúc này.' }, { status: 500 });
   }
 }

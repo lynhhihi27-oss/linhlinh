@@ -39,7 +39,7 @@ export async function GET(request) {
     });
   } catch (error) {
     console.error('Fraud API GET error:', error);
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: 'Không thể tải báo cáo quản trị lúc này.' }, { status: 500 });
   }
 }
 
@@ -51,19 +51,26 @@ export async function POST(request) {
     connection = await pool.getConnection();
 
     const body = await request.json();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ success: false, message: 'Dữ liệu yêu cầu không hợp lệ.' }, { status: 400 });
+    }
     const { action, target_user_id, reason, revoke_amount } = body;
+    const targetUserId = Number(target_user_id);
+    if (!Number.isSafeInteger(targetUserId) || targetUserId <= 0 || targetUserId === auth.user.user_id) {
+      return NextResponse.json({ success: false, message: 'Tài khoản mục tiêu không hợp lệ.' }, { status: 400 });
+    }
 
     await connection.beginTransaction();
 
     if (action === 'TOGGLE_LOCK') {
-      const [users] = await connection.execute('SELECT account_status FROM users WHERE user_id = ?', [target_user_id]);
+      const [users] = await connection.execute('SELECT account_status FROM users WHERE user_id = ?', [targetUserId]);
       if (users.length === 0) {
         await connection.rollback();
         return NextResponse.json({ success: false, message: 'Không tìm thấy người dùng' }, { status: 404 });
       }
 
       const newStatus = users[0].account_status === 'ACTIVE' ? 'LOCKED' : 'ACTIVE';
-      await connection.execute('UPDATE users SET account_status = ? WHERE user_id = ?', [newStatus, target_user_id]);
+      await connection.execute('UPDATE users SET account_status = ? WHERE user_id = ?', [newStatus, targetUserId]);
       await connection.commit();
 
       return NextResponse.json({
@@ -74,16 +81,18 @@ export async function POST(request) {
     }
 
     if (action === 'REVOKE_XU') {
-      const [users] = await connection.execute('SELECT xu_balance FROM users WHERE user_id = ? FOR UPDATE', [target_user_id]);
+      const [users] = await connection.execute('SELECT xu_balance FROM users WHERE user_id = ? FOR UPDATE', [targetUserId]);
       if (users.length === 0) {
         await connection.rollback();
         return NextResponse.json({ success: false, message: 'Không tìm thấy người dùng' }, { status: 404 });
       }
 
       const currentBalance = users[0].xu_balance;
-      const amountToRevoke = parseInt(revoke_amount || currentBalance);
+      const amountToRevoke = revoke_amount === undefined || revoke_amount === null
+        ? currentBalance
+        : Number(revoke_amount);
 
-      if (amountToRevoke <= 0) {
+      if (!Number.isSafeInteger(amountToRevoke) || amountToRevoke <= 0) {
         await connection.rollback();
         return NextResponse.json({ success: false, message: 'Số xu cần thu hồi phải lớn hơn 0!' }, { status: 400 });
       }
@@ -91,13 +100,13 @@ export async function POST(request) {
       const newBalance = Math.max(0, currentBalance - amountToRevoke);
       const actualDeducted = currentBalance - newBalance;
 
-      await connection.execute('UPDATE users SET xu_balance = ? WHERE user_id = ?', [newBalance, target_user_id]);
+      await connection.execute('UPDATE users SET xu_balance = ? WHERE user_id = ?', [newBalance, targetUserId]);
 
       // Ghi sổ cái XU_TRANSACTIONS loại ADJUST
       await connection.execute(
         `INSERT INTO xu_transactions (user_id, view_id, redemption_id, txn_type, amount, balance_after, note, created_at)
          VALUES (?, NULL, NULL, 'ADJUST', ?, ?, ?, NOW())`,
-        [target_user_id, -actualDeducted, newBalance, `Admin thu hồi xu gian lận: ${reason || 'Vi phạm điều khoản xem'}`]
+        [targetUserId, -actualDeducted, newBalance, `Admin thu hồi xu gian lận: ${typeof reason === 'string' ? reason.slice(0, 200) : 'Vi phạm điều khoản xem'}`]
       );
 
       await connection.commit();
@@ -113,7 +122,7 @@ export async function POST(request) {
   } catch (error) {
     if (connection) await connection.rollback();
     console.error('Fraud API POST error:', error);
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: 'Không thể xử lý yêu cầu quản trị lúc này.' }, { status: 500 });
   } finally {
     connection?.release();
   }

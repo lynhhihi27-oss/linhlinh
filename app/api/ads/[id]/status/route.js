@@ -31,6 +31,6 @@ export async function PATCH(request, { params }) {
     });
   } catch (error) {
     console.error('API Ads status error:', error);
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: 'Không thể cập nhật chiến dịch lúc này.' }, { status: 500 });
   }
 }

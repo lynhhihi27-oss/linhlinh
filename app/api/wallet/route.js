@@ -63,6 +63,6 @@ export async function GET(request) {
     });
   } catch (error) {
     console.error('API wallet error:', error);
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: 'Không thể tải ví xu lúc này.' }, { status: 500 });
   }
 }

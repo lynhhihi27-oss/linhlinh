@@ -58,6 +58,6 @@ export async function GET(request) {
     });
   } catch (error) {
     console.error('API stats error:', error);
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: 'Không thể tải thống kê lúc này.' }, { status: 500 });
   }
 }

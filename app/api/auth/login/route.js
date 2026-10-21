@@ -8,9 +8,16 @@ export async function POST(request) {
   try {
     assertSessionConfig();
     const body = await request.json();
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ success: false, message: 'Dữ liệu đăng nhập không hợp lệ.' }, { status: 400 });
+    }
     const { emailOrPhone, password } = body;
 
-    if (typeof emailOrPhone !== 'string' || typeof password !== 'string' || !emailOrPhone.trim() || !password) {
+    if (
+      typeof emailOrPhone !== 'string' || typeof password !== 'string' ||
+      !emailOrPhone.trim() || emailOrPhone.trim().length > 100 ||
+      !password || password.length > 128
+    ) {
       return NextResponse.json({
         success: false,
         message: 'Vui lòng nhập Email/Số điện thoại và Mật khẩu!'
@@ -22,7 +29,7 @@ export async function POST(request) {
        FROM users 
        WHERE email = ? OR phone = ? 
        LIMIT 1`,
-      [emailOrPhone.trim(), emailOrPhone.trim()]
+      [emailOrPhone.trim().toLowerCase(), emailOrPhone.trim()]
     );
 
     if (users.length === 0) {
@@ -58,6 +65,6 @@ export async function POST(request) {
     return response;
   } catch (error) {
     console.error('Login error:', error);
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: 'Không thể đăng nhập lúc này. Vui lòng thử lại sau.' }, { status: 500 });
   }
 }
