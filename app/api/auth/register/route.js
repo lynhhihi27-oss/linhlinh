@@ -1,14 +1,23 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import crypto from 'crypto';
+import { assertSessionConfig, createSessionCookie, hashPassword } from '@/lib/auth';
 
 export async function POST(request) {
   try {
+    assertSessionConfig();
     const body = await request.json();
     const { email, phone, full_name, password, birth_year, gender, province, referral_code } = body;
 
-    if (!email || !phone || !full_name || !password || !birth_year) {
+    if (
+      typeof email !== 'string' || typeof phone !== 'string' || typeof full_name !== 'string' ||
+      typeof password !== 'string' || !email.trim() || !phone.trim() || !full_name.trim() || !birth_year
+    ) {
       return NextResponse.json({ success: false, message: 'Vui lòng điền đầy đủ các thông tin bắt buộc!' }, { status: 400 });
+    }
+
+    if (password.length < 8) {
+      return NextResponse.json({ success: false, message: 'Mật khẩu phải có ít nhất 8 ký tự.' }, { status: 400 });
     }
 
     const currentYear = new Date().getFullYear();
@@ -40,8 +49,7 @@ export async function POST(request) {
       referredBy = refUsers[0].user_id;
     }
 
-    // Password hash giả lập chuẩn bcrypt demo
-    const passwordHash = '$2a$12$N9qo8uLOickgx2ZMRZoMye.I.kQ9v3wZ2P1aZ5vJ.OqUe5X.3r9yG';
+    const passwordHash = await hashPassword(password);
     const newReferralCode = `YX${crypto.randomBytes(6).toString('hex').toUpperCase()}`;
 
     const result = await query(
@@ -52,12 +60,21 @@ export async function POST(request) {
 
     const newUserId = result.insertId;
 
-    return NextResponse.json({
+    const users = await query(
+      `SELECT user_id, email, phone, referral_code, full_name, birth_year, gender, province,
+              system_role, account_status, xu_balance, referred_by, created_at
+       FROM users WHERE user_id = ?`,
+      [newUserId]
+    );
+    const response = NextResponse.json({
       success: true,
       message: 'Đăng ký tài khoản thành công!',
       user_id: newUserId,
-      referral_code: newReferralCode
+      referral_code: newReferralCode,
+      user: users[0]
     });
+    response.headers.set('Set-Cookie', createSessionCookie(newUserId));
+    return response;
   } catch (error) {
     console.error('Register API error:', error);
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });

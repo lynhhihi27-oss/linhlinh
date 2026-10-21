@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import pool, { query } from '@/lib/db';
+import { requireSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request) {
   try {
+    const auth = await requireSession(request, ['ADMIN']);
+    if (auth.response) return auth.response;
+
     // Lấy danh sách tài khoản nghi vấn: bị LOCKED hoặc có lượt xem INVALID
     const suspiciousUsers = await query(
       `SELECT u.user_id, u.full_name, u.email, u.phone, u.account_status, u.xu_balance,
@@ -40,8 +44,12 @@ export async function GET() {
 }
 
 export async function POST(request) {
-  const connection = await pool.getConnection();
+  let connection;
   try {
+    const auth = await requireSession(request, ['ADMIN']);
+    if (auth.response) return auth.response;
+    connection = await pool.getConnection();
+
     const body = await request.json();
     const { action, target_user_id, reason, revoke_amount } = body;
 
@@ -103,10 +111,10 @@ export async function POST(request) {
     await connection.rollback();
     return NextResponse.json({ success: false, message: 'Hành động không hợp lệ' }, { status: 400 });
   } catch (error) {
-    await connection.rollback();
+    if (connection) await connection.rollback();
     console.error('Fraud API POST error:', error);
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   } finally {
-    connection.release();
+    connection?.release();
   }
 }

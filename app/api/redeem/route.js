@@ -1,15 +1,21 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import crypto from 'crypto';
+import { requireSession } from '@/lib/auth';
 
 export async function POST(request) {
-  const connection = await pool.getConnection();
+  let connection;
   try {
-    const body = await request.json();
-    const { user_id, reward_id } = body;
+    const auth = await requireSession(request, ['VIEWER']);
+    if (auth.response) return auth.response;
+    connection = await pool.getConnection();
 
-    if (!user_id || !reward_id) {
-      return NextResponse.json({ success: false, message: 'Thiếu thông tin người dùng hoặc phần thưởng!' }, { status: 400 });
+    const body = await request.json();
+    const { reward_id } = body;
+    const user_id = auth.user.user_id;
+
+    if (!reward_id) {
+      return NextResponse.json({ success: false, message: 'Thiếu thông tin phần thưởng!' }, { status: 400 });
     }
 
     await connection.beginTransaction();
@@ -111,10 +117,10 @@ export async function POST(request) {
       balance_after: newBalance
     });
   } catch (error) {
-    await connection.rollback();
+    if (connection) await connection.rollback();
     console.error('Redeem error:', error);
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   } finally {
-    connection.release();
+    connection?.release();
   }
 }

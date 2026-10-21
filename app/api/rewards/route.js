@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { requireSession } from '@/lib/auth';
 
 export async function GET() {
   try {
@@ -18,6 +19,9 @@ export async function GET() {
 
 export async function POST(request) {
   try {
+    const auth = await requireSession(request, ['ADMIN']);
+    if (auth.response) return auth.response;
+
     const body = await request.json();
     const { reward_name, reward_type, face_value_vnd, xu_cost, stock_qty } = body;
 

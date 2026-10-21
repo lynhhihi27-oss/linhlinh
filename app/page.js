@@ -76,32 +76,6 @@ export default function YouTubeXuApp() {
   // Rewards subtab
   const [rewardSubTab, setRewardSubTab] = useState('shop'); // 'shop' | 'my-gifts'
 
-  // Quick Switch Preset Accounts
-  const demoAccounts = [
-    { id: '5', label: 'Trần Văn Long (Viewer)', role: 'VIEWER' },
-    { id: '6', label: 'Lê Thị Nhi (Viewer)', role: 'VIEWER' },
-    { id: '2', label: 'VNG Corp (Advertiser)', role: 'ADVERTISER' },
-    { id: '1', label: 'Quản Trị (Admin)', role: 'ADMIN' },
-    { id: '10', label: 'Tài Khoản Bị Khóa (Demo UC-06)', role: 'VIEWER' },
-    { id: 'guest', label: 'Khách(Guest)', role: 'GUEST' }
-  ];
-
-  // Danh sách tài khoản thật từ DB (mật khẩu demo: 123456)
-  const DB_ACCOUNTS = [
-    { email: 'admin@youtubexu.vn',     name: 'Nguyễn Quản Trị',       role: 'ADMIN',       status: 'ACTIVE', balance: 0 },
-    { email: 'adv.vng@gmail.com',      name: 'Công ty Cổ phần VNG',    role: 'ADVERTISER',  status: 'ACTIVE', balance: 50000 },
-    { email: 'adv.shopee@gmail.com',   name: 'Shopee Việt Nam',        role: 'ADVERTISER',  status: 'ACTIVE', balance: 100000 },
-    { email: 'adv.vinamilk@gmail.com', name: 'Vinamilk Corporation',   role: 'ADVERTISER',  status: 'ACTIVE', balance: 80000 },
-    { email: 'long.tv@gmail.com',      name: 'Trần Văn Long',          role: 'VIEWER',      status: 'ACTIVE', balance: 540 },
-    { email: 'nhi.lt@gmail.com',       name: 'Lê Thị Nhi',            role: 'VIEWER',      status: 'ACTIVE', balance: 500 },
-    { email: 'tu.pm@gmail.com',        name: 'Phạm Minh Tú',          role: 'VIEWER',      status: 'ACTIVE', balance: 120 },
-    { email: 'lam.hm@gmail.com',       name: 'Hoàng Mai Lâm',         role: 'VIEWER',      status: 'ACTIVE', balance: 2450 },
-    { email: 'luong.nv@gmail.com',     name: 'Nguyễn Văn Lượng',      role: 'VIEWER',      status: 'ACTIVE', balance: 0 },
-    { email: 'gianlan.bot@gmail.com',  name: 'Tài Khoản Gian Lận',    role: 'VIEWER',      status: 'LOCKED', balance: 0 },
-    { email: 'bachken221@gmail.com',   name: 'Duong Viet Bach',        role: 'VIEWER',      status: 'ACTIVE', balance: 0 },
-    { email: 'bachken2121@gmail.com',  name: 'Dung bach',              role: 'VIEWER',      status: 'ACTIVE', balance: 0 },
-  ];
-
   // Helper notification toast
   const showToast = (message, type = 'success') => {
     setNotification({ message, type });
@@ -109,16 +83,15 @@ export default function YouTubeXuApp() {
   };
 
   // Load User Data
-  const loadUser = async (userId = '5') => {
+  const loadUser = async () => {
     try {
       setIsLoading(true);
-      const res = await fetch(`/api/auth/me?userId=${userId}`);
+      const res = await fetch('/api/auth/me');
       const data = await res.json();
       if (data.success) {
         setCurrentUser(data.user);
-        // Tự động chuyển tab phù hợp nếu role đặc thù
-        if (data.user.system_role === 'ADMIN') setActiveTab('admin');
-        else if (data.user.system_role === 'ADVERTISER') setActiveTab('advertiser');
+        if (data.user?.system_role === 'ADMIN') setActiveTab('admin');
+        else if (data.user?.system_role === 'ADVERTISER') setActiveTab('advertiser');
         else if (activeTab === 'admin' || activeTab === 'advertiser') setActiveTab('watch');
       }
     } catch (err) {
@@ -141,10 +114,9 @@ export default function YouTubeXuApp() {
 
   // Load Ads for Viewer
   const loadAds = async () => {
-    if (!currentUser) return;
     try {
-      const catParam = selectedCategory ? `&category=${selectedCategory}` : '';
-      const res = await fetch(`/api/ads?role=VIEWER&userId=${currentUser.user_id}${catParam}`);
+      const categoryParam = selectedCategory ? `?category=${encodeURIComponent(selectedCategory)}` : '';
+      const res = await fetch(`/api/ads${categoryParam}`);
       const data = await res.json();
       if (data.success) setAds(data.ads);
     } catch (err) {
@@ -156,7 +128,7 @@ export default function YouTubeXuApp() {
   const loadAdvertiserAds = async () => {
     if (!currentUser) return;
     try {
-      const res = await fetch(`/api/ads?role=ADVERTISER&userId=${currentUser.user_id}`);
+      const res = await fetch('/api/ads');
       const data = await res.json();
       if (data.success) setAds(data.ads);
     } catch (err) {
@@ -179,8 +151,7 @@ export default function YouTubeXuApp() {
   const loadRedemptions = async () => {
     if (!currentUser) return;
     try {
-      const role = currentUser.system_role;
-      const res = await fetch(`/api/redemptions?userId=${currentUser.user_id}&role=${role}`);
+      const res = await fetch('/api/redemptions');
       const data = await res.json();
       if (data.success) setRedemptions(data.redemptions);
     } catch (err) {
@@ -190,13 +161,15 @@ export default function YouTubeXuApp() {
 
   // Load Wallet
   const loadWallet = async () => {
-    if (!currentUser || currentUser.user_id === 0) return;
+    if (!currentUser) return;
     try {
-      const res = await fetch(`/api/wallet?userId=${currentUser.user_id}`);
+      const res = await fetch('/api/wallet');
       const data = await res.json();
       if (data.success) {
         setWalletData(data);
-        setCurrentUser(prev => ({ ...prev, xu_balance: data.balance }));
+        setCurrentUser(prev => prev?.xu_balance === data.balance
+          ? prev
+          : { ...prev, xu_balance: data.balance });
       }
     } catch (err) {
       console.error(err);
@@ -218,7 +191,7 @@ export default function YouTubeXuApp() {
     try {
       const [statsRes, adsRes, fraudRes] = await Promise.all([
         fetch('/api/admin/stats').then(r => r.json()),
-        fetch('/api/ads?role=ADMIN').then(r => r.json()),
+        fetch('/api/ads').then(r => r.json()),
         fetch('/api/admin/fraud').then(r => r.json())
       ]);
       if (statsRes.success) setAdminStats(statsRes.stats);
@@ -230,18 +203,17 @@ export default function YouTubeXuApp() {
   };
 
   useEffect(() => {
-    loadUser('5');
+    loadUser();
     loadCategories();
     loadRewards();
   }, []);
 
   useEffect(() => {
-    if (!currentUser) return;
     if (activeTab === 'watch') loadAds();
-    if (activeTab === 'rewards') loadRedemptions();
-    if (activeTab === 'wallet') loadWallet();
-    if (activeTab === 'advertiser') loadAdvertiserAds();
-    if (activeTab === 'admin') {
+    if (currentUser && activeTab === 'rewards') loadRedemptions();
+    if (currentUser && activeTab === 'wallet') loadWallet();
+    if (currentUser && activeTab === 'advertiser') loadAdvertiserAds();
+    if (currentUser && activeTab === 'admin') {
       loadAdminData();
       loadRedemptions();
     }
@@ -256,8 +228,8 @@ export default function YouTubeXuApp() {
 
   // UC-01: Bắt đầu xem quảng cáo
   const handleStartWatch = async (ad) => {
-    if (currentUser.user_id === 0) {
-      showToast('Vui lòng đăng nhập hoặc chọn tài khoản Người xem để nhận xu!', 'error');
+    if (!currentUser) {
+      setShowLoginModal(true);
       return;
     }
     if (currentUser.account_status === 'LOCKED') {
@@ -269,7 +241,7 @@ export default function YouTubeXuApp() {
       const res = await fetch('/api/views/start', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: currentUser.user_id, ad_id: ad.ad_id })
+        body: JSON.stringify({ ad_id: ad.ad_id })
       });
       const data = await res.json();
 
@@ -311,7 +283,6 @@ export default function YouTubeXuApp() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          user_id: currentUser.user_id,
           ad_id: watchingAd.ad_id,
           view_token: watchToken,
           watched_seconds: watchingAd.duration_sec
@@ -340,8 +311,8 @@ export default function YouTubeXuApp() {
 
   // Đổi quà (UC-02)
   const handleRedeem = async (reward) => {
-    if (currentUser.user_id === 0) {
-      showToast('Vui lòng đăng nhập để đổi quà tặng!', 'error');
+    if (!currentUser) {
+      setShowLoginModal(true);
       return;
     }
     if (currentUser.xu_balance < reward.xu_cost) {
@@ -357,7 +328,7 @@ export default function YouTubeXuApp() {
       const res = await fetch('/api/redeem', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: currentUser.user_id, reward_id: reward.reward_id })
+        body: JSON.stringify({ reward_id: reward.reward_id })
       });
       const data = await res.json();
 
@@ -384,8 +355,7 @@ export default function YouTubeXuApp() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...newCampaign,
-          advertiser_id: currentUser.user_id
+          ...newCampaign
         })
       });
       const data = await res.json();
@@ -421,7 +391,7 @@ export default function YouTubeXuApp() {
       const res = await fetch(`/api/ads/${adId}/status`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status, reject_reason: rejectReason, reviewed_by: currentUser.user_id })
+        body: JSON.stringify({ status, reject_reason: rejectReason })
       });
       const data = await res.json();
       if (data.success) {
@@ -442,7 +412,7 @@ export default function YouTubeXuApp() {
       const res = await fetch(`/api/redemptions/${redemptionId}/process`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, admin_id: currentUser.user_id })
+        body: JSON.stringify({ action })
       });
       const data = await res.json();
       if (data.success) {
@@ -538,10 +508,21 @@ export default function YouTubeXuApp() {
   };
 
   // Đăng xuất
-  const handleLogout = () => {
-    setCurrentUser({ user_id: 0, full_name: 'Khách!!', system_role: 'GUEST', account_status: 'ACTIVE', xu_balance: 0 });
-    setActiveTab('watch');
-    showToast('Đã đăng xuất khỏi hệ thống!', 'success');
+  const handleLogout = async () => {
+    try {
+      const res = await fetch('/api/auth/logout', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        showToast(data.message || 'Không thể đăng xuất.', 'error');
+        return;
+      }
+      setCurrentUser(null);
+      setActiveTab('watch');
+      showToast('Đã đăng xuất khỏi hệ thống!', 'success');
+    } catch (err) {
+      console.error(err);
+      showToast('Lỗi kết nối khi đăng xuất!', 'error');
+    }
   };
 
   // Đăng ký tài khoản mới (UC-03)
@@ -557,7 +538,9 @@ export default function YouTubeXuApp() {
       if (data.success) {
         showToast(`Đăng ký thành công! Mã giới thiệu của bạn: ${data.referral_code}`, 'success');
         setShowRegisterModal(false);
-        loadUser(data.user_id);
+        setRegisterForm((prev) => ({ ...prev, password: '' }));
+        setCurrentUser(data.user);
+        setActiveTab('watch');
       } else {
         showToast(data.message, 'error');
       }
@@ -717,26 +700,11 @@ export default function YouTubeXuApp() {
             )}
           </nav>
 
-          {/* Right Action: Demo Role Switcher & User Balance */}
+          {/* Account actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-            
-            {/* Quick Demo Selector */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600 }}>Chuyển Vai Trò Nhanh:</span>
-              <select 
-                className="form-select"
-                style={{ padding: '6px 10px', fontSize: '0.8rem', width: 'auto' }}
-                value={currentUser?.user_id === 0 ? 'guest' : (currentUser?.user_id?.toString() || '5')}
-                onChange={(e) => loadUser(e.target.value)}
-              >
-                {demoAccounts.map(acc => (
-                  <option key={acc.id} value={acc.id}>{acc.label}</option>
-                ))}
-              </select>
-            </div>
 
             {/* Balance Pill + Đăng xuất (khi đã đăng nhập) */}
-            {currentUser && currentUser.user_id !== 0 ? (
+            {currentUser ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                 <div 
                   style={{
@@ -1775,78 +1743,6 @@ export default function YouTubeXuApp() {
               </p>
             </div>
 
-            {/* Danh sách tài khoản DB - Click để đăng nhập nhanh */}
-            <div style={{ margin: '16px 24px 0' }}>
-              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: '8px' }}>
-                👤 Chọn tài khoản để đăng nhập nhanh <span style={{ color: 'rgba(255,255,255,0.2)', fontWeight: 400 }}>— mật khẩu: 123456</span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', maxHeight: '220px', overflowY: 'auto', paddingRight: '2px' }}>
-                {DB_ACCOUNTS.map((acc) => {
-                  const roleColors = {
-                    ADMIN: { bg: 'rgba(239,68,68,0.12)', border: 'rgba(239,68,68,0.3)', badge: '#ef4444', label: 'Admin' },
-                    ADVERTISER: { bg: 'rgba(59,130,246,0.12)', border: 'rgba(59,130,246,0.3)', badge: '#3b82f6', label: 'NQC' },
-                    VIEWER: acc.status === 'LOCKED'
-                      ? { bg: 'rgba(156,163,175,0.08)', border: 'rgba(156,163,175,0.2)', badge: '#9ca3af', label: 'Bị khóa' }
-                      : { bg: 'rgba(16,185,129,0.08)', border: 'rgba(16,185,129,0.2)', badge: '#10b981', label: 'Viewer' },
-                  };
-                  const c = roleColors[acc.role] || roleColors.VIEWER;
-                  return (
-                    <button
-                      key={acc.email}
-                      type="button"
-                      onClick={async () => {
-                        const payload = { emailOrPhone: acc.email, password: '123456' };
-                        setLoginForm(payload);
-                        setIsLoginLoading(true);
-                        try {
-                          const res = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
-                          const data = await res.json();
-                          if (data.success) {
-                            setCurrentUser(data.user);
-                            setShowLoginModal(false);
-                            setLoginForm({ emailOrPhone: '', password: '' });
-                            if (data.user.system_role === 'ADMIN') setActiveTab('admin');
-                            else if (data.user.system_role === 'ADVERTISER') setActiveTab('advertiser');
-                            else setActiveTab('watch');
-                            showToast(`Chào mừng, ${data.user.full_name}! 👋`, 'success');
-                          } else { showToast(data.message, 'error'); }
-                        } catch { showToast('Lỗi kết nối server!', 'error'); } finally { setIsLoginLoading(false); }
-                      }}
-                      style={{
-                        display: 'flex', alignItems: 'center', gap: '10px',
-                        background: c.bg, border: `1px solid ${c.border}`,
-                        borderRadius: 'var(--radius-md)', padding: '8px 12px',
-                        cursor: 'pointer', textAlign: 'left', width: '100%',
-                        transition: 'all 0.15s ease'
-                      }}
-                      onMouseEnter={(e) => { e.currentTarget.style.transform = 'translateX(3px)'; e.currentTarget.style.opacity = '0.85'; }}
-                      onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.opacity = '1'; }}
-                    >
-                      <div style={{
-                        width: '28px', height: '28px', borderRadius: '50%', flexShrink: 0,
-                        background: c.badge, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        fontSize: '0.7rem', fontWeight: 700, color: '#fff'
-                      }}>
-                        {acc.name.charAt(0)}
-                      </div>
-                      <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontWeight: 600, fontSize: '0.82rem', color: '#e2e8f0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {acc.name}
-                        </div>
-                        <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {acc.email}
-                        </div>
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '2px', flexShrink: 0 }}>
-                        <span style={{ fontSize: '0.65rem', fontWeight: 700, color: c.badge, textTransform: 'uppercase' }}>{c.label}</span>
-                        {acc.balance > 0 && <span style={{ fontSize: '0.65rem', color: '#f59e0b' }}>{acc.balance.toLocaleString()} xu</span>}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
             {/* Form đăng nhập */}
             <form onSubmit={handleLogin} style={{ padding: '20px 24px 24px' }}>
               <div className="form-group">
@@ -1975,6 +1871,7 @@ export default function YouTubeXuApp() {
                   type="password"
                   className="form-input" 
                   placeholder="Mật khẩu của bạn"
+                  minLength={8}
                   value={registerForm.password}
                   onChange={(e) => setRegisterForm({ ...registerForm, password: e.target.value })}
                   required

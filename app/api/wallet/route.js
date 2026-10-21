@@ -1,12 +1,14 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { requireSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId') || '5';
+    const auth = await requireSession(request);
+    if (auth.response) return auth.response;
+    const userId = auth.user.user_id;
 
     // 1. Số dư và thông tin ví
     const users = await query('SELECT user_id, full_name, referral_code, xu_balance, account_status FROM users WHERE user_id = ?', [userId]);

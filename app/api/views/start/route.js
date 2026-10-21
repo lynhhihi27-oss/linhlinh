@@ -1,15 +1,20 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import crypto from 'crypto';
+import { requireSession } from '@/lib/auth';
 
 export async function POST(request) {
   try {
-    const body = await request.json();
-    const { user_id, ad_id, device_id } = body;
+    const auth = await requireSession(request, ['VIEWER']);
+    if (auth.response) return auth.response;
 
-    if (!user_id || !ad_id) {
-      return NextResponse.json({ success: false, message: 'Thiếu thông tin user hoặc quảng cáo!' }, { status: 400 });
+    const body = await request.json();
+    const { ad_id, device_id } = body;
+
+    if (!ad_id) {
+      return NextResponse.json({ success: false, message: 'Thiếu thông tin quảng cáo!' }, { status: 400 });
     }
+    const user_id = auth.user.user_id;
 
     const today = new Date().toISOString().split('T')[0];
 

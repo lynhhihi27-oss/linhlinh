@@ -1,21 +1,22 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { assertSessionConfig, createSessionCookie, hashPassword, verifyPassword } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(request) {
   try {
+    assertSessionConfig();
     const body = await request.json();
     const { emailOrPhone, password } = body;
 
-    if (!emailOrPhone || !password) {
+    if (typeof emailOrPhone !== 'string' || typeof password !== 'string' || !emailOrPhone.trim() || !password) {
       return NextResponse.json({
         success: false,
         message: 'Vui lòng nhập Email/Số điện thoại và Mật khẩu!'
       }, { status: 400 });
     }
 
-    // Tìm kiếm người dùng theo Email hoặc Số điện thoại
     const users = await query(
       `SELECT user_id, email, phone, referral_code, full_name, password_hash, birth_year, gender, province, system_role, account_status, xu_balance, referred_by, created_at
        FROM users 
@@ -27,39 +28,34 @@ export async function POST(request) {
     if (users.length === 0) {
       return NextResponse.json({
         success: false,
-        message: 'Tài khoản không tồn tại trên hệ thống! Vui lòng kiểm tra lại.'
+        message: 'Email/Số điện thoại hoặc mật khẩu không chính xác.'
       }, { status: 401 });
     }
 
     const user = users[0];
-
-    // Xác thực mật khẩu:
-    // Hỗ trợ mật khẩu mẫu '123456' hoặc so sánh trực tiếp
-    const isDefaultPassword = (password === '123456');
-    const isHashMatched = (user.password_hash === password);
-    const isBcryptSample = (user.password_hash === '$2a$12$N9qo8uLOickgx2ZMRZoMye.I.kQ9v3wZ2P1aZ5vJ.OqUe5X.3r9yG');
-
-    if (!isDefaultPassword && !isHashMatched && !(isBcryptSample && password === '123456')) {
+    const { valid, needsRehash } = await verifyPassword(password, user.password_hash);
+    if (!valid) {
       return NextResponse.json({
         success: false,
-        message: 'Mật khẩu không chính xác! (Mật khẩu mặc định demo là: 123456)'
+        message: 'Email/Số điện thoại hoặc mật khẩu không chính xác.'
       }, { status: 401 });
     }
 
-    // Thông báo nếu tài khoản bị khóa
-    let alertMessage = 'Đăng nhập thành công!';
-    if (user.account_status === 'LOCKED') {
-      alertMessage = 'Tài khoản của bạn hiện đang bị KHÓA do nghi vấn vi phạm chính sách xem video!';
+    const sessionCookie = createSessionCookie(user.user_id);
+    if (needsRehash) {
+      await query('UPDATE users SET password_hash = ? WHERE user_id = ?', [await hashPassword(password), user.user_id]);
     }
 
-    // Loại bỏ password_hash trước khi trả về client
     delete user.password_hash;
-
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
-      message: alertMessage,
+      message: user.account_status === 'LOCKED'
+        ? 'Đăng nhập thành công, nhưng tài khoản hiện đang bị khóa.'
+        : 'Đăng nhập thành công!',
       user
     });
+    response.headers.set('Set-Cookie', sessionCookie);
+    return response;
   } catch (error) {
     console.error('Login error:', error);
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });

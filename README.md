@@ -31,12 +31,23 @@ Mặc định ứng dụng kết nối tới `localhost\SQLEXPRESS`, cơ sở d�
 3. Chạy ứng dụng:
 
    ```powershell
+   $bytes = New-Object byte[] 32
+   $rng = [Security.Cryptography.RandomNumberGenerator]::Create()
+   $rng.GetBytes($bytes)
+   "AUTH_SECRET=$([Convert]::ToBase64String($bytes))" | Set-Content -Encoding ascii .env.local
    npm run dev
    ```
 
    Mở [http://localhost:3000](http://localhost:3000). Tài khoản demo: `admin@youtubexu.vn`, mật khẩu `123456`.
 
-Có thể đặt `DB_HOST` và `DB_NAME` để đổi máy chủ hoặc tên cơ sở dữ liệu mặc định.
+`AUTH_SECRET` dùng để ký phiên đăng nhập; cần giữ bí mật và đặt thành giá trị ngẫu nhiên riêng tối thiểu 32 ký tự ở mọi môi trường. Không commit `.env.local`. Có thể đặt `DB_HOST` và `DB_NAME` để đổi máy chủ hoặc tên cơ sở dữ liệu mặc định.
+
+## Tài khoản và phiên đăng nhập
+
+- Đăng nhập tạo cookie phiên `HttpOnly`, `SameSite=Lax`, hết hạn sau 7 ngày; đăng xuất sẽ xóa cookie.
+- Quyền và danh tính được đọc từ cơ sở dữ liệu ở backend cho mỗi API request; không thể đổi tài khoản bằng cách sửa `userId` hoặc `role` gửi từ trình duyệt.
+- Tài khoản mới cần mật khẩu từ 8 ký tự. Mật khẩu được băm bằng scrypt; mật khẩu mẫu cũ `123456` chỉ dùng với tài khoản khởi tạo và được nâng cấp sang hash mới sau lần đăng nhập đầu tiên.
+- Khách có thể xem danh sách quảng cáo, nhưng cần đăng nhập để xem nhận xu, đổi quà hoặc dùng ví.
 
 ## Nhắm mục tiêu quảng cáo và giới thiệu bạn bè
 

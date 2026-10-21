@@ -1,17 +1,20 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { getSessionUser, requireSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
-    const role = searchParams.get('role') || 'VIEWER';
-    const userId = searchParams.get('userId') || '5';
+    const user = await getSessionUser(request);
+    if (user && user.account_status !== 'ACTIVE') {
+      return NextResponse.json({ success: false, message: 'Tài khoản của bạn đang bị khóa.' }, { status: 403 });
+    }
     const categoryId = searchParams.get('category');
     const status = searchParams.get('status');
 
-    if (role === 'ADMIN') {
+    if (user?.system_role === 'ADMIN') {
       let sql = `
         SELECT a.*, c.category_name, u.full_name AS advertiser_name
         FROM ads a
@@ -28,7 +31,7 @@ export async function GET(request) {
       return NextResponse.json({ success: true, ads });
     }
 
-    if (role === 'ADVERTISER') {
+    if (user?.system_role === 'ADVERTISER') {
       const sql = `
         SELECT a.*, c.category_name
         FROM ads a
@@ -36,11 +39,11 @@ export async function GET(request) {
         WHERE a.advertiser_id = ?
         ORDER BY a.ad_id DESC
       `;
-      const ads = await query(sql, [userId]);
+      const ads = await query(sql, [user.user_id]);
       return NextResponse.json({ success: true, ads });
     }
 
-    // Role: VIEWER hoặc GUEST: Lấy quảng cáo ACTIVE
+    const userId = user?.user_id ?? null;
     const today = new Date().toISOString().split('T')[0];
     let sql = `
       SELECT a.*, c.category_name, u.full_name AS advertiser_name,
@@ -87,9 +90,11 @@ export async function GET(request) {
 
 export async function POST(request) {
   try {
+    const auth = await requireSession(request, ['ADVERTISER', 'ADMIN']);
+    if (auth.response) return auth.response;
+
     const body = await request.json();
     const {
-      advertiser_id,
       category_id,
       title,
       video_url,
@@ -145,7 +150,7 @@ export async function POST(request) {
     const result = await query(
       `INSERT INTO ads (advertiser_id, category_id, title, video_url, duration_sec, reward_xu, budget_xu, spent_xu, start_date, end_date, status, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 'PENDING', NOW())`,
-      [advertiser_id || 2, category_id, title, video_url, dur, finalReward, budget, start_date, end_date]
+      [auth.user.user_id, category_id, title, video_url, dur, finalReward, budget, start_date, end_date]
     );
 
     const newAdId = result.insertId;

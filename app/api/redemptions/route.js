@@ -1,13 +1,13 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { requireSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
-    const role = searchParams.get('role') || 'VIEWER';
+    const auth = await requireSession(request, ['VIEWER', 'ADMIN']);
+    if (auth.response) return auth.response;
 
     let sql = `
       SELECT r.*, rew.reward_name, rew.reward_type, rew.face_value_vnd, u.full_name, u.email, u.phone
@@ -17,9 +17,9 @@ export async function GET(request) {
     `;
     const params = [];
 
-    if (role !== 'ADMIN') {
+    if (auth.user.system_role !== 'ADMIN') {
       sql += ' WHERE r.user_id = ?';
-      params.push(userId || '5');
+      params.push(auth.user.user_id);
     }
 
     sql += ' ORDER BY r.redemption_id DESC';

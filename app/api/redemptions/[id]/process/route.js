@@ -1,13 +1,18 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import crypto from 'crypto';
+import { requireSession } from '@/lib/auth';
 
 export async function PATCH(request, { params }) {
-  const connection = await pool.getConnection();
+  let connection;
   try {
+    const auth = await requireSession(request, ['ADMIN']);
+    if (auth.response) return auth.response;
+    connection = await pool.getConnection();
+
     const redemptionId = params.id;
     const body = await request.json();
-    const { action, admin_id } = body; // action: 'APPROVE' hoặc 'REJECT'
+    const { action } = body;
 
     await connection.beginTransaction();
 
@@ -39,7 +44,7 @@ export async function PATCH(request, { params }) {
         `UPDATE redemptions 
          SET status = 'APPROVED', gift_code = ?, processed_at = NOW(), processed_by = ? 
          WHERE redemption_id = ?`,
-        [giftCode, admin_id || 1, redemptionId]
+        [giftCode, auth.user.user_id, redemptionId]
       );
 
       await connection.commit();
@@ -65,7 +70,7 @@ export async function PATCH(request, { params }) {
         `UPDATE redemptions 
          SET status = 'REJECTED', processed_at = NOW(), processed_by = ? 
          WHERE redemption_id = ?`,
-        [admin_id || 1, redemptionId]
+        [auth.user.user_id, redemptionId]
       );
 
       // Ghi sổ cái XU_TRANSACTIONS loại REFUND
@@ -92,10 +97,10 @@ export async function PATCH(request, { params }) {
       return NextResponse.json({ success: false, message: 'Hành động không hợp lệ!' }, { status: 400 });
     }
   } catch (error) {
-    await connection.rollback();
+    if (connection) await connection.rollback();
     console.error('Process redemption error:', error);
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   } finally {
-    connection.release();
+    connection?.release();
   }
 }

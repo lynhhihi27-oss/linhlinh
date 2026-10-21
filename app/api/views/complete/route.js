@@ -1,13 +1,19 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
+import { requireSession } from '@/lib/auth';
 
 export async function POST(request) {
-  const connection = await pool.getConnection();
+  let connection;
   try {
-    const body = await request.json();
-    const { user_id, ad_id, view_token, watched_seconds } = body;
+    const auth = await requireSession(request, ['VIEWER']);
+    if (auth.response) return auth.response;
+    connection = await pool.getConnection();
 
-    if (!user_id || !ad_id || !view_token) {
+    const body = await request.json();
+    const { ad_id, view_token } = body;
+    const user_id = auth.user.user_id;
+
+    if (!ad_id || !view_token) {
       return NextResponse.json({ success: false, message: 'Thiếu dữ liệu xác thực phiên xem!' }, { status: 400 });
     }
 
@@ -15,7 +21,8 @@ export async function POST(request) {
 
     // 1. Kiểm tra bản ghi lượt xem
     const [views] = await connection.execute(
-      `SELECT view_id, user_id, ad_id, view_token, view_status, reward_xu, started_at
+      `SELECT view_id, user_id, ad_id, view_token, view_status, reward_xu, started_at,
+              DATEDIFF(MILLISECOND, started_at, GETDATE()) AS elapsed_milliseconds
        FROM ad_views 
        WHERE view_token = ? FOR UPDATE`,
       [view_token]
@@ -35,6 +42,11 @@ export async function POST(request) {
     if (currentView.view_status === 'COMPLETED') {
       await connection.rollback();
       return NextResponse.json({ success: false, message: 'Lượt xem này đã được nhận xu trước đó (Idempotent)!' }, { status: 400 });
+    }
+
+    if (currentView.view_status !== 'STARTED') {
+      await connection.rollback();
+      return NextResponse.json({ success: false, message: 'Phiên xem không còn hợp lệ.' }, { status: 400 });
     }
 
     const [viewers] = await connection.execute(
@@ -61,8 +73,9 @@ export async function POST(request) {
     const ad = ads[0];
 
     // Kiểm tra thời lượng đã xem phía server
-    const secondsWatched = parseInt(watched_seconds || 0);
-    if (secondsWatched < ad.duration_sec) {
+    const elapsedSeconds = Math.floor(Number(currentView.elapsed_milliseconds) / 1000);
+    const secondsWatched = Number.isFinite(elapsedSeconds) ? Math.max(0, elapsedSeconds) : 0;
+    if (!Number.isFinite(elapsedSeconds) || secondsWatched < ad.duration_sec) {
       // Đánh dấu INVALID nếu chưa xem đủ thời gian
       await connection.execute(
         `UPDATE ad_views SET view_status = 'INVALID', watched_seconds = ? WHERE view_id = ?`,
@@ -76,6 +89,10 @@ export async function POST(request) {
     }
 
     const reward = ad.reward_xu;
+    if (ad.spent_xu + reward > ad.budget_xu) {
+      await connection.rollback();
+      return NextResponse.json({ success: false, message: 'Quảng cáo đã hết ngân sách.' }, { status: 400 });
+    }
 
     // 3. Cập nhật bản ghi ad_views sang COMPLETED
     await connection.execute(
@@ -153,10 +170,10 @@ export async function POST(request) {
       referral_bonus_xu: referralBonusXu
     });
   } catch (error) {
-    await connection.rollback();
+    if (connection) await connection.rollback();
     console.error('API views/complete error:', error);
     return NextResponse.json({ success: false, message: error.message }, { status: 500 });
   } finally {
-    connection.release();
+    connection?.release();
   }
 }

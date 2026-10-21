@@ -1,10 +1,14 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { requireSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(request) {
   try {
+    const auth = await requireSession(request, ['ADMIN']);
+    if (auth.response) return auth.response;
+
     const userStats = await query(
       `SELECT 
          COUNT(*) AS total_users,

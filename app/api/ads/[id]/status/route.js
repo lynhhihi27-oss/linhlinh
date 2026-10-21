@@ -1,11 +1,15 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
+import { requireSession } from '@/lib/auth';
 
 export async function PATCH(request, { params }) {
   try {
+    const auth = await requireSession(request, ['ADMIN']);
+    if (auth.response) return auth.response;
+
     const adId = params.id;
     const body = await request.json();
-    const { status, reject_reason, reviewed_by } = body;
+    const { status, reject_reason } = body;
 
     const allowedStatuses = ['ACTIVE', 'PAUSED', 'REJECTED', 'ENDED'];
     if (!allowedStatuses.includes(status)) {
@@ -18,7 +22,7 @@ export async function PATCH(request, { params }) {
            reject_reason = ?, 
            reviewed_by = ?
        WHERE ad_id = ?`,
-      [status, reject_reason || null, reviewed_by || 1, adId]
+      [status, reject_reason || null, auth.user.user_id, adId]
     );
 
     return NextResponse.json({
