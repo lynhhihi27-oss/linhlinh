@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Play, CheckCircle2, Clock, Coins, Gift, Wallet, ShieldAlert, 
   BarChart3, PlusCircle, AlertTriangle, UserCheck, Lock, Unlock, 
@@ -18,8 +18,15 @@ export default function YouTubeXuApp() {
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [ads, setAds] = useState([]);
+  const [isLoadingAds, setIsLoadingAds] = useState(true);
+  const [adsError, setAdsError] = useState('');
   const [rewards, setRewards] = useState([]);
+  const [isLoadingRewards, setIsLoadingRewards] = useState(true);
+  const [rewardsError, setRewardsError] = useState('');
   const [redemptions, setRedemptions] = useState([]);
+  const [redeemingRewardId, setRedeemingRewardId] = useState(null);
+  const redemptionRequestKeys = useRef(new Map());
+  const activeRedemption = useRef(false);
   const [walletData, setWalletData] = useState({
     balance: 0,
     total_earned: 0,
@@ -30,14 +37,6 @@ export default function YouTubeXuApp() {
   const [adminStats, setAdminStats] = useState(null);
   const [adminAds, setAdminAds] = useState([]);
   const [fraudData, setFraudData] = useState({ suspicious_users: [], recent_invalid_views: [] });
-
-  // Watch modal state (UC-01)
-  const [watchingAd, setWatchingAd] = useState(null);
-  const [watchToken, setWatchToken] = useState(null);
-  const [secondsRemaining, setSecondsRemaining] = useState(0);
-  const [isCompletedWatching, setIsCompletedWatching] = useState(false);
-  const [isClaiming, setIsClaiming] = useState(false);
-  const watchTimerRef = useRef(null);
 
   // New Ad Campaign Form (UC-04)
   const [newCampaign, setNewCampaign] = useState({
@@ -83,7 +82,7 @@ export default function YouTubeXuApp() {
   };
 
   // Load User Data
-  const loadUser = async () => {
+  const loadUser = useCallback(async () => {
     try {
       setIsLoading(true);
       const res = await fetch('/api/auth/me');
@@ -92,17 +91,17 @@ export default function YouTubeXuApp() {
         setCurrentUser(data.user);
         if (data.user?.system_role === 'ADMIN') setActiveTab('admin');
         else if (data.user?.system_role === 'ADVERTISER') setActiveTab('advertiser');
-        else if (activeTab === 'admin' || activeTab === 'advertiser') setActiveTab('watch');
+        else setActiveTab(tab => tab === 'admin' || tab === 'advertiser' ? 'watch' : tab);
       }
     } catch (err) {
       console.error(err);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
   // Load Categories
-  const loadCategories = async () => {
+  const loadCategories = useCallback(async () => {
     try {
       const res = await fetch('/api/categories');
       const data = await res.json();
@@ -110,23 +109,31 @@ export default function YouTubeXuApp() {
     } catch (err) {
       console.error(err);
     }
-  };
+  }, []);
 
   // Load Ads for Viewer
-  const loadAds = async () => {
+  const loadAds = useCallback(async () => {
+    setIsLoadingAds(true);
+    setAdsError('');
     try {
       const categoryParam = selectedCategory ? `?category=${encodeURIComponent(selectedCategory)}` : '';
       const res = await fetch(`/api/ads${categoryParam}`);
       const data = await res.json();
-      if (data.success) setAds(data.ads);
+      if (!res.ok || !data.success) {
+        setAdsError(data.message || 'Không thể tải danh sách quảng cáo.');
+        return;
+      }
+      setAds(data.ads);
     } catch (err) {
       console.error(err);
+      setAdsError('Không thể kết nối để tải quảng cáo. Vui lòng thử lại.');
+    } finally {
+      setIsLoadingAds(false);
     }
-  };
+  }, [selectedCategory]);
 
   // Load Advertiser Ads
-  const loadAdvertiserAds = async () => {
-    if (!currentUser) return;
+  const loadAdvertiserAds = useCallback(async () => {
     try {
       const res = await fetch('/api/ads');
       const data = await res.json();
@@ -134,22 +141,30 @@ export default function YouTubeXuApp() {
     } catch (err) {
       console.error(err);
     }
-  };
+  }, []);
 
   // Load Rewards
-  const loadRewards = async () => {
+  const loadRewards = useCallback(async () => {
+    setIsLoadingRewards(true);
+    setRewardsError('');
     try {
       const res = await fetch('/api/rewards');
       const data = await res.json();
-      if (data.success) setRewards(data.rewards);
+      if (!res.ok || !data.success) {
+        setRewardsError(data.message || 'Không thể tải danh sách quà.');
+        return;
+      }
+      setRewards(data.rewards);
     } catch (err) {
       console.error(err);
+      setRewardsError('Không thể kết nối để tải quà. Vui lòng thử lại.');
+    } finally {
+      setIsLoadingRewards(false);
     }
-  };
+  }, []);
 
   // Load Redemptions
-  const loadRedemptions = async () => {
-    if (!currentUser) return;
+  const loadRedemptions = useCallback(async () => {
     try {
       const res = await fetch('/api/redemptions');
       const data = await res.json();
@@ -157,11 +172,10 @@ export default function YouTubeXuApp() {
     } catch (err) {
       console.error(err);
     }
-  };
+  }, []);
 
   // Load Wallet
-  const loadWallet = async () => {
-    if (!currentUser) return;
+  const loadWallet = useCallback(async () => {
     try {
       const res = await fetch('/api/wallet');
       const data = await res.json();
@@ -174,7 +188,7 @@ export default function YouTubeXuApp() {
     } catch (err) {
       console.error(err);
     }
-  };
+  }, []);
 
   const handleCopyReferralCode = async () => {
     try {
@@ -187,7 +201,7 @@ export default function YouTubeXuApp() {
   };
 
   // Load Admin Data
-  const loadAdminData = async () => {
+  const loadAdminData = useCallback(async () => {
     try {
       const [statsRes, adsRes, fraudRes] = await Promise.all([
         fetch('/api/admin/stats').then(r => r.json()),
@@ -200,13 +214,13 @@ export default function YouTubeXuApp() {
     } catch (err) {
       console.error(err);
     }
-  };
+  }, []);
 
   useEffect(() => {
     loadUser();
     loadCategories();
     loadRewards();
-  }, []);
+  }, [loadUser, loadCategories, loadRewards]);
 
   useEffect(() => {
     if (activeTab === 'watch') loadAds();
@@ -217,100 +231,11 @@ export default function YouTubeXuApp() {
       loadAdminData();
       loadRedemptions();
     }
-  }, [currentUser, activeTab, selectedCategory]);
-
-  // Clean timer on unmount
-  useEffect(() => {
-    return () => {
-      if (watchTimerRef.current) clearInterval(watchTimerRef.current);
-    };
-  }, []);
-
-  // UC-01: Bắt đầu xem quảng cáo
-  const handleStartWatch = async (ad) => {
-    if (!currentUser) {
-      setShowLoginModal(true);
-      return;
-    }
-    if (currentUser.account_status === 'LOCKED') {
-      showToast('Tài khoản của bạn đang bị khóa do vi phạm quy chế hệ thống!', 'error');
-      return;
-    }
-
-    try {
-      const res = await fetch('/api/views/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ad_id: ad.ad_id })
-      });
-      const data = await res.json();
-
-      if (!data.success) {
-        showToast(data.message, 'error');
-        return;
-      }
-
-      setWatchingAd({ ...ad, duration_sec: data.duration_sec, reward_xu: data.reward_xu });
-      setWatchToken(data.view_token);
-      setSecondsRemaining(data.duration_sec);
-      setIsCompletedWatching(false);
-
-      // Bắt đầu đếm ngược thời gian xem
-      if (watchTimerRef.current) clearInterval(watchTimerRef.current);
-      watchTimerRef.current = setInterval(() => {
-        setSecondsRemaining(prev => {
-          if (prev <= 1) {
-            clearInterval(watchTimerRef.current);
-            setIsCompletedWatching(true);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-
-    } catch (err) {
-      console.error(err);
-      showToast('Có lỗi xảy ra khi bắt đầu xem!', 'error');
-    }
-  };
-
-  // UC-01: Hoàn tất nhận xu
-  const handleClaimReward = async () => {
-    if (!isCompletedWatching || isClaiming) return;
-    try {
-      setIsClaiming(true);
-      const res = await fetch('/api/views/complete', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ad_id: watchingAd.ad_id,
-          view_token: watchToken,
-          watched_seconds: watchingAd.duration_sec
-        })
-      });
-      const data = await res.json();
-
-      if (data.success) {
-        const referralMessage = data.referral_bonus_xu > 0
-          ? ` Người giới thiệu cũng nhận +${data.referral_bonus_xu} xu.`
-          : '';
-        showToast(`🎉 ${data.message}${referralMessage}`, 'success');
-        setCurrentUser(prev => ({ ...prev, xu_balance: data.balance_after }));
-        setWatchingAd(null);
-        loadAds();
-      } else {
-        showToast(data.message, 'error');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast('Không thể cộng xu lúc này!', 'error');
-    } finally {
-      setIsClaiming(false);
-    }
-  };
+  }, [currentUser, activeTab, loadAds, loadAdminData, loadAdvertiserAds, loadRedemptions, loadWallet]);
 
   // Đổi quà (UC-02)
   const handleRedeem = async (reward) => {
+    if (activeRedemption.current) return;
     if (!currentUser) {
       setShowLoginModal(true);
       return;
@@ -324,15 +249,43 @@ export default function YouTubeXuApp() {
       return;
     }
 
+    const rewardId = Number(reward.reward_id);
+    const requestStorageKey = `youtube-xu:redeem:${currentUser.user_id}:${rewardId}`;
+    let requestKey = redemptionRequestKeys.current.get(requestStorageKey);
+    if (!requestKey) {
+      try {
+        requestKey = sessionStorage.getItem(requestStorageKey);
+      } catch (error) {
+        console.error('Unable to read the redemption retry key from session storage:', error);
+      }
+    }
+    if (!requestKey) {
+      requestKey = crypto.randomUUID();
+    }
+    redemptionRequestKeys.current.set(requestStorageKey, requestKey);
+    try {
+      sessionStorage.setItem(requestStorageKey, requestKey);
+    } catch (error) {
+      console.error('Unable to persist the redemption retry key in session storage:', error);
+    }
+    activeRedemption.current = true;
+    setRedeemingRewardId(rewardId);
+
     try {
       const res = await fetch('/api/redeem', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ reward_id: reward.reward_id })
+        body: JSON.stringify({ reward_id: rewardId, request_key: requestKey })
       });
       const data = await res.json();
 
       if (data.success) {
+        redemptionRequestKeys.current.delete(requestStorageKey);
+        try {
+          sessionStorage.removeItem(requestStorageKey);
+        } catch (error) {
+          console.error('Unable to clear the completed redemption retry key:', error);
+        }
         showToast(data.message, 'success');
         setCurrentUser(prev => ({ ...prev, xu_balance: data.balance_after }));
         loadRewards();
@@ -344,6 +297,9 @@ export default function YouTubeXuApp() {
     } catch (err) {
       console.error(err);
       showToast('Lỗi khi thực hiện đổi quà!', 'error');
+    } finally {
+      activeRedemption.current = false;
+      setRedeemingRewardId(null);
     }
   };
 
@@ -408,11 +364,17 @@ export default function YouTubeXuApp() {
 
   // UC-AD04: Admin duyệt đơn đổi quà lớn
   const handleProcessRedemption = async (redemptionId, action) => {
+    let giftCode;
+    if (action === 'APPROVE') {
+      giftCode = prompt('Nhập mã quà thực tế do nhà cung cấp cấp:');
+      if (!giftCode?.trim()) return;
+    }
+
     try {
       const res = await fetch(`/api/redemptions/${redemptionId}/process`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action })
+        body: JSON.stringify({ action, gift_code: giftCode })
       });
       const data = await res.json();
       if (data.success) {
@@ -550,15 +512,6 @@ export default function YouTubeXuApp() {
     }
   };
 
-  // Extract YouTube ID helper
-  const getYouTubeEmbedUrl = (url) => {
-    if (!url) return '';
-    const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/;
-    const match = url.match(regExp);
-    const videoId = (match && match[2].length === 11) ? match[2] : 'dQw4w9WgXcQ';
-    return `https://www.youtube.com/embed/${videoId}?autoplay=1&controls=0&disablekb=1&modestbranding=1&rel=0`;
-  };
-
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       
@@ -580,7 +533,7 @@ export default function YouTubeXuApp() {
           alignItems: 'center',
           gap: '8px',
           animation: 'fadeIn 0.2s ease-out'
-        }}>
+        }} role="status" aria-live="polite">
           {notification.type === 'success' ? <CheckCircle2 size={18} /> : <AlertTriangle size={18} />}
           <span>{notification.message}</span>
         </div>
@@ -595,10 +548,10 @@ export default function YouTubeXuApp() {
         top: 0,
         zIndex: 50
       }}>
-        <div className="container" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '70px' }}>
+        <div className="container site-header-content" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', height: '70px' }}>
           
           {/* Logo */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => setActiveTab('watch')}>
+          <button type="button" aria-label="Trang chủ YouTube Xu" style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer', color: 'inherit', textAlign: 'left' }} onClick={() => setActiveTab('watch')}>
             <div style={{
               width: '38px',
               height: '38px',
@@ -619,11 +572,11 @@ export default function YouTubeXuApp() {
                 Sprint 1 • 3NF Platform
               </div>
             </div>
-          </div>
+          </button>
 
           {/* Nav Tabs */}
-          <nav style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <button 
+          <nav className="primary-nav" aria-label="Điều hướng chính" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <button
               className="btn btn-sm"
               style={{
                 background: activeTab === 'watch' ? 'var(--bg-surface-hover)' : 'transparent',
@@ -634,7 +587,7 @@ export default function YouTubeXuApp() {
               onClick={() => setActiveTab('watch')}
             >
               <Play size={16} color="#ff0033" />
-              <span>Xem Kiếm Xu</span>
+              <span>Chiến dịch</span>
             </button>
 
             <button 
@@ -704,9 +657,13 @@ export default function YouTubeXuApp() {
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
 
             {/* Balance Pill + Đăng xuất (khi đã đăng nhập) */}
-            {currentUser ? (
+            {isLoading ? (
+              <span role="status" style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>Đang kiểm tra phiên...</span>
+            ) : currentUser ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div 
+                <button
+                  type="button"
+                  aria-label={`Số dư ví: ${currentUser.xu_balance?.toLocaleString() || 0} Xu. Mở ví`}
                   style={{
                     display: 'flex',
                     alignItems: 'center',
@@ -724,7 +681,7 @@ export default function YouTubeXuApp() {
                   <span style={{ fontWeight: 800, color: '#fbbf24', fontSize: '0.95rem' }}>
                     {currentUser.xu_balance?.toLocaleString()} <span style={{ fontSize: '0.75rem' }}>XU</span>
                   </span>
-                </div>
+                </button>
                 <button
                   className="btn btn-secondary btn-sm"
                   onClick={handleLogout}
@@ -765,8 +722,8 @@ export default function YouTubeXuApp() {
               </span>
             </h1>
             <p style={{ color: 'var(--text-muted)', fontSize: '0.88rem', marginTop: '4px' }}>
-              {activeTab === 'watch' && 'Xem trọn vẹn video quảng cáo để nhận xu tức thì vào ví. Mỗi quảng cáo nhận 1 lần/ngày.'}
-              {activeTab === 'rewards' && 'Đổi số xu tích lũy lấy thẻ nạp điện thoại (Viettel, Vina, Mobi) hoặc voucher MoMo, Grab, Shopee.'}
+              {activeTab === 'watch' && 'Danh sách chiến dịch đang hoạt động. Nhận Xu đang tạm khóa cho đến khi được tích hợp xác minh lượt phát quảng cáo từ nhà cung cấp.'}
+              {activeTab === 'rewards' && 'Gửi yêu cầu đổi quà; Xu và tồn kho chỉ được trừ khi yêu cầu hợp lệ, mã quà cần được quản trị viên xác nhận từ nhà cung cấp.'}
               {activeTab === 'wallet' && 'Sổ cái kiểm toán biến động xu chuẩn 3NF: EARN, REDEEM, REFUND, BONUS, ADJUST.'}
               {activeTab === 'advertiser' && 'Khởi tạo chiến dịch video YouTube, thiết lập ngân sách và bộ lọc khách hàng mục tiêu.'}
               {activeTab === 'admin' && 'Bảng điều khiển quản trị: Kiểm duyệt quảng cáo, duyệt đơn đổi thưởng > 50k, chống gian lận.'}
@@ -791,8 +748,8 @@ export default function YouTubeXuApp() {
               borderRadius: 'var(--radius-md)',
               textAlign: 'center'
             }}>
-              <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontWeight: 600 }}>HẠN MỨC NGÀY</div>
-              <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#10b981' }}>50 lượt / 500 Xu</div>
+              <div style={{ fontSize: '0.72rem', color: 'var(--text-dim)', fontWeight: 600 }}>XÁC MINH LƯỢT XEM</div>
+              <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#fcd34d' }}>Chưa tích hợp</div>
             </div>
           </div>
         </div>
@@ -839,8 +796,24 @@ export default function YouTubeXuApp() {
               </button>
             </div>
 
+            <div className="glass-panel" role="note" style={{ padding: '14px 18px', marginBottom: '20px', borderColor: 'rgba(245, 158, 11, 0.35)', color: 'var(--text-muted)' }}>
+              <strong style={{ color: '#fcd34d' }}>Nhận Xu tạm thời chưa khả dụng.</strong>{' '}
+              Ứng dụng chưa tích hợp xác minh lượt phát quảng cáo từ nhà cung cấp, vì vậy không ghi nhận lượt xem hoặc cộng Xu chỉ dựa trên bộ đếm thời gian.
+            </div>
+
             {/* Ads Grid */}
-            {ads.length === 0 ? (
+            {isLoadingAds ? (
+              <div className="glass-panel" role="status" style={{ padding: '48px 20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                Đang tải danh sách chiến dịch...
+              </div>
+            ) : adsError ? (
+              <div className="glass-panel" role="alert" style={{ padding: '32px 20px', textAlign: 'center' }}>
+                <p style={{ color: 'var(--text-muted)', marginBottom: '14px' }}>{adsError}</p>
+                <button className="btn btn-secondary btn-sm" onClick={loadAds}>
+                  <RefreshCw size={14} /> Thử tải lại
+                </button>
+              </div>
+            ) : ads.length === 0 ? (
               <div className="glass-panel" style={{ padding: '60px 20px', textAlign: 'center' }}>
                 <Coins size={48} color="var(--text-dim)" style={{ margin: '0 auto 16px' }} />
                 <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>Không có quảng cáo nào phù hợp lúc này</h3>
@@ -867,9 +840,13 @@ export default function YouTubeXuApp() {
                       alignItems: 'center',
                       justifyContent: 'center'
                     }}>
-                      <img 
+                      {/* Load these non-critical thumbnails directly and lazily instead of through the Next.js image optimizer. */}
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
                         src={`https://img.youtube.com/vi/${(ad.video_url.match(/(?:v=|\/)([\w-]{11})/) || [])[1] || 'dQw4w9WgXcQ'}/hqdefault.jpg`}
                         alt={ad.title}
+                        loading="lazy"
+                        decoding="async"
                         style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.8 }}
                         onError={(e) => { e.target.style.display = 'none'; }}
                       />
@@ -931,10 +908,10 @@ export default function YouTubeXuApp() {
                         ) : (
                           <button 
                             className="btn btn-primary btn-sm"
-                            onClick={() => handleStartWatch(ad)}
-                            disabled={currentUser?.account_status === 'LOCKED'}
+                            disabled
+                            title="Chưa tích hợp xác minh phát quảng cáo"
                           >
-                            <Play size={14} /> Xem ngay (+{ad.reward_xu} Xu)
+                            <Clock size={14} /> Tạm khóa nhận Xu
                           </button>
                         )}
                       </div>
@@ -982,9 +959,25 @@ export default function YouTubeXuApp() {
 
             {/* Subtab 1: Gian hàng quà tặng */}
             {rewardSubTab === 'shop' && (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
-                {rewards.map(item => (
-                  <div key={item.reward_id} className="glass-panel" style={{ padding: '22px', display: 'flex', flexDirection: 'column' }}>
+              isLoadingRewards ? (
+                <div className="glass-panel" role="status" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  Đang tải danh sách quà...
+                </div>
+              ) : rewardsError ? (
+                <div className="glass-panel" role="alert" style={{ padding: '32px 20px', textAlign: 'center' }}>
+                  <p style={{ color: 'var(--text-muted)', marginBottom: '14px' }}>{rewardsError}</p>
+                  <button className="btn btn-secondary btn-sm" onClick={loadRewards}>
+                    <RefreshCw size={14} /> Thử tải lại
+                  </button>
+                </div>
+              ) : rewards.length === 0 ? (
+                <div className="glass-panel" style={{ padding: '40px', textAlign: 'center', color: 'var(--text-muted)' }}>
+                  Hiện chưa có phần quà nào khả dụng.
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '20px' }}>
+                  {rewards.map(item => (
+                    <div key={item.reward_id} className="glass-panel" style={{ padding: '22px', display: 'flex', flexDirection: 'column' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '14px' }}>
                       <span className={`badge ${item.reward_type === 'PHONE_CARD' ? 'badge-blue' : 'badge-gold'}`}>
                         {item.reward_type === 'PHONE_CARD' ? 'Thẻ cào điện thoại' : 'E-Voucher'}
@@ -1000,22 +993,21 @@ export default function YouTubeXuApp() {
                     </div>
 
                     <div style={{ background: 'var(--bg-surface-elevated)', padding: '10px 12px', borderRadius: 'var(--radius-sm)', fontSize: '0.82rem', color: 'var(--text-muted)', marginBottom: '18px' }}>
-                      {item.face_value_vnd <= 50000 
-                        ? '⚡ Duyệt tự động & nhận mã tức thì.' 
-                        : '🛡️ Trị giá > 50k: Admin duyệt trong 24h.'}
+                      Quản trị viên sẽ xác nhận tồn kho và nhập mã quà thực tế từ nhà cung cấp.
                     </div>
 
                     <button 
                       className="btn btn-gold" 
                       style={{ marginTop: 'auto', width: '100%' }}
                       onClick={() => handleRedeem(item)}
-                      disabled={item.stock_qty <= 0 || (currentUser?.xu_balance || 0) < item.xu_cost}
+                      disabled={redeemingRewardId !== null || item.stock_qty <= 0 || (currentUser?.xu_balance || 0) < item.xu_cost}
                     >
-                      <Gift size={16} /> Đổi ngay
+                      <Gift size={16} /> {redeemingRewardId === item.reward_id ? 'Đang gửi yêu cầu...' : 'Đổi ngay'}
                     </button>
-                  </div>
-                ))}
-              </div>
+                    </div>
+                  ))}
+                </div>
+              )
             )}
 
             {/* Subtab 2: Quà của tôi */}
@@ -1224,8 +1216,9 @@ export default function YouTubeXuApp() {
 
               <form onSubmit={handleCreateCampaign}>
                 <div className="form-group">
-                  <label className="form-label">Tiêu đề chiến dịch quảng cáo *</label>
+                  <label className="form-label" htmlFor="campaign-title">Tiêu đề chiến dịch quảng cáo *</label>
                   <input 
+                    id="campaign-title"
                     className="form-input" 
                     placeholder="VD: Ra mắt ứng dụng học Tiếng Anh mới"
                     value={newCampaign.title}
@@ -1235,8 +1228,9 @@ export default function YouTubeXuApp() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Link Video YouTube *</label>
+                  <label className="form-label" htmlFor="campaign-video">Link Video YouTube *</label>
                   <input 
+                    id="campaign-video"
                     className="form-input" 
                     placeholder="https://www.youtube.com/watch?v=..."
                     value={newCampaign.video_url}
@@ -1247,8 +1241,9 @@ export default function YouTubeXuApp() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                   <div className="form-group">
-                    <label className="form-label">Danh mục *</label>
+                    <label className="form-label" htmlFor="campaign-category">Danh mục *</label>
                     <select 
+                      id="campaign-category"
                       className="form-select"
                       value={newCampaign.category_id}
                       onChange={(e) => setNewCampaign({ ...newCampaign, category_id: parseInt(e.target.value) })}
@@ -1260,8 +1255,9 @@ export default function YouTubeXuApp() {
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Thời lượng video (5-60 giây) *</label>
+                    <label className="form-label" htmlFor="campaign-duration">Thời lượng video (5-60 giây) *</label>
                     <input 
+                      id="campaign-duration"
                       type="number"
                       className="form-input" 
                       min="5" 
@@ -1281,8 +1277,9 @@ export default function YouTubeXuApp() {
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
                   <div className="form-group">
-                    <label className="form-label">Xu thưởng mỗi lượt xem</label>
+                    <label className="form-label" htmlFor="campaign-reward">Xu thưởng mỗi lượt xem</label>
                     <input 
+                      id="campaign-reward"
                       type="number"
                       className="form-input" 
                       value={newCampaign.reward_xu}
@@ -1293,8 +1290,9 @@ export default function YouTubeXuApp() {
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">Tổng ngân sách chiến dịch (Xu) *</label>
+                    <label className="form-label" htmlFor="campaign-budget">Tổng ngân sách chiến dịch (Xu) *</label>
                     <input 
+                      id="campaign-budget"
                       type="number"
                       className="form-input" 
                       min="100"
@@ -1313,8 +1311,9 @@ export default function YouTubeXuApp() {
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
                     <div>
-                      <label className="form-label">Giới tính</label>
+                      <label className="form-label" htmlFor="campaign-target-gender">Giới tính</label>
                       <select 
+                        id="campaign-target-gender"
                         className="form-select"
                         value={newCampaign.target_gender}
                         onChange={(e) => setNewCampaign({ ...newCampaign, target_gender: e.target.value })}
@@ -1326,8 +1325,9 @@ export default function YouTubeXuApp() {
                       </select>
                     </div>
                     <div>
-                      <label className="form-label">Tỉnh / Thành phố</label>
+                      <label className="form-label" htmlFor="campaign-target-province">Tỉnh / Thành phố</label>
                       <input 
+                        id="campaign-target-province"
                         className="form-input"
                         placeholder="VD: Hà Nội, TP.HCM hoặc để trống"
                         value={newCampaign.target_province}
@@ -1337,8 +1337,9 @@ export default function YouTubeXuApp() {
                   </div>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px', marginTop: '10px' }}>
                     <div>
-                      <label className="form-label">Độ tuổi tối thiểu</label>
+                      <label className="form-label" htmlFor="campaign-age-from">Độ tuổi tối thiểu</label>
                       <input
+                        id="campaign-age-from"
                         type="number"
                         className="form-input"
                         min="16"
@@ -1352,8 +1353,9 @@ export default function YouTubeXuApp() {
                       />
                     </div>
                     <div>
-                      <label className="form-label">Độ tuổi tối đa</label>
+                      <label className="form-label" htmlFor="campaign-age-to">Độ tuổi tối đa</label>
                       <input
+                        id="campaign-age-to"
                         type="number"
                         className="form-input"
                         min="16"
@@ -1513,10 +1515,10 @@ export default function YouTubeXuApp() {
                 )}
               </div>
 
-              {/* Cột 2: Duyệt Đơn Đổi Quà > 50k (UC-AD04) */}
+              {/* Cột 2: Duyệt đơn đổi quà */}
               <div className="glass-panel" style={{ padding: '22px' }}>
                 <h3 style={{ fontSize: '1.15rem', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <Gift size={18} color="#f59e0b" /> Duyệt Đơn Đổi Thưởng &gt; 50k (UC-AD04)
+                  <Gift size={18} color="#f59e0b" /> Xác nhận đơn đổi quà
                 </h3>
 
                 {redemptions.filter(r => r.status === 'PENDING').length === 0 ? (
@@ -1540,7 +1542,7 @@ export default function YouTubeXuApp() {
                         </div>
                         <div style={{ display: 'flex', gap: '8px' }}>
                           <button className="btn btn-primary btn-sm" onClick={() => handleProcessRedemption(r.redemption_id, 'APPROVE')}>
-                            ✓ Cấp mã quà (APPROVED)
+                            ✓ Xác nhận mã quà thực tế
                           </button>
                           <button className="btn btn-secondary btn-sm" onClick={() => handleProcessRedemption(r.redemption_id, 'REJECT')}>
                             ✕ Từ chối & Hoàn xu
@@ -1634,94 +1636,11 @@ export default function YouTubeXuApp() {
       </main>
 
       {/* ========================================================
-          MODAL XEM VIDEO NHẬN XU (UC-01 PLAYER)
-      ======================================================== */}
-      {watchingAd && (
-        <div className="modal-overlay">
-          <div className="modal-box" style={{ maxWidth: '780px' }}>
-            <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span className="badge badge-gold">
-                  <Coins size={14} /> +{watchingAd.reward_xu} XU
-                </span>
-                <h3 style={{ fontSize: '1.05rem', fontWeight: 700 }}>{watchingAd.title}</h3>
-              </div>
-              <button 
-                onClick={() => {
-                  if (confirm('Nếu thoát giữa chừng, bạn sẽ KHÔNG nhận được xu thưởng. Bạn có chắc muốn đóng?')) {
-                    if (watchTimerRef.current) clearInterval(watchTimerRef.current);
-                    setWatchingAd(null);
-                  }
-                }}
-                style={{ color: 'var(--text-dim)', fontSize: '1.2rem', padding: '4px 8px' }}
-              >
-                ✕
-              </button>
-            </div>
-
-            {/* Video Iframe Embed */}
-            <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', background: '#000' }}>
-              <iframe
-                src={getYouTubeEmbedUrl(watchingAd.video_url)}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  border: 'none',
-                  pointerEvents: 'none' // Chặn tua video
-                }}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-              />
-            </div>
-
-            {/* Interactive Countdown & Claim Bar */}
-            <div style={{ padding: '20px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-                <span style={{ fontSize: '0.88rem', fontWeight: 600, color: 'var(--text-muted)' }}>
-                  {isCompletedWatching ? '🎉 Đã xem đủ thời lượng yêu cầu!' : `Đang xem: Còn lại ${secondsRemaining} giây`}
-                </span>
-                <span style={{ fontSize: '0.88rem', fontWeight: 700, color: '#f59e0b' }}>
-                  Phần thưởng: +{watchingAd.reward_xu} Xu
-                </span>
-              </div>
-
-              {/* Progress Bar */}
-              <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.08)', borderRadius: '4px', overflow: 'hidden', marginBottom: '18px' }}>
-                <div style={{
-                  height: '100%',
-                  width: `${Math.min(100, ((watchingAd.duration_sec - secondsRemaining) / watchingAd.duration_sec) * 100)}%`,
-                  background: isCompletedWatching ? '#10b981' : 'linear-gradient(90deg, #ff0033, #f59e0b)',
-                  transition: 'width 1s linear'
-                }} />
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <span style={{ fontSize: '0.78rem', color: 'var(--text-dim)' }}>
-                  * Không chuyển tab hoặc đóng trình duyệt để hệ thống xác thực heartbeat.
-                </span>
-
-                <button 
-                  className={`btn ${isCompletedWatching ? 'btn-primary' : 'btn-secondary'}`}
-                  style={{ minWidth: '180px' }}
-                  onClick={handleClaimReward}
-                  disabled={!isCompletedWatching || isClaiming}
-                >
-                  {isClaiming ? 'Đang cộng xu...' : (isCompletedWatching ? `Nhận ngay +${watchingAd.reward_xu} Xu` : `Chờ (${secondsRemaining}s)`)}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ========================================================
           MODAL ĐĂNG NHẬP (UC-G04)
       ======================================================== */}
       {showLoginModal && (
         <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setShowLoginModal(false); }}>
-          <div className="modal-box" style={{ maxWidth: '460px' }}>
+          <div className="modal-box" role="dialog" aria-modal="true" aria-labelledby="login-heading" style={{ maxWidth: '460px' }}>
             {/* Header modal */}
             <div style={{ padding: '24px 24px 0', textAlign: 'center' }}>
               <div style={{
@@ -1737,16 +1656,16 @@ export default function YouTubeXuApp() {
               }}>
                 <Play size={24} fill="#fff" color="#fff" style={{ marginLeft: '2px' }} />
               </div>
-              <h3 style={{ fontSize: '1.35rem', fontWeight: 800, marginBottom: '6px' }}>Đăng nhập YouTube Xu</h3>
+              <h3 id="login-heading" style={{ fontSize: '1.35rem', fontWeight: 800, marginBottom: '6px' }}>Đăng nhập YouTube Xu</h3>
               <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginBottom: '4px' }}>
-                Xem quảng cáo, tích xu và đổi thưởng hấp dẫn mỗi ngày!
+                Quản lý chiến dịch, theo dõi ví Xu và yêu cầu đổi quà.
               </p>
             </div>
 
             {/* Form đăng nhập */}
             <form onSubmit={handleLogin} style={{ padding: '20px 24px 24px' }}>
               <div className="form-group">
-                <label className="form-label">Email hoặc Số điện thoại *</label>
+                <label className="form-label" htmlFor="login-email-phone">Email hoặc Số điện thoại *</label>
                 <input
                   id="login-email-phone"
                   className="form-input"
@@ -1759,7 +1678,7 @@ export default function YouTubeXuApp() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Mật khẩu *</label>
+                <label className="form-label" htmlFor="login-password">Mật khẩu *</label>
                 <input
                   id="login-password"
                   type="password"
@@ -1813,16 +1732,17 @@ export default function YouTubeXuApp() {
       ======================================================== */}
       {showRegisterModal && (
         <div className="modal-overlay">
-          <div className="modal-box" style={{ maxWidth: '520px' }}>
+          <div className="modal-box" role="dialog" aria-modal="true" aria-labelledby="register-heading" style={{ maxWidth: '520px' }}>
             <div style={{ padding: '20px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>Đăng Ký Tài Khoản Người Xem</h3>
+              <h3 id="register-heading" style={{ fontSize: '1.2rem', fontWeight: 700 }}>Đăng Ký Tài Khoản Người Xem</h3>
               <button onClick={() => setShowRegisterModal(false)} style={{ color: 'var(--text-dim)', fontSize: '1.2rem' }}>✕</button>
             </div>
 
             <form onSubmit={handleRegister} style={{ padding: '20px' }}>
               <div className="form-group">
-                <label className="form-label">Họ và tên *</label>
+                <label className="form-label" htmlFor="register-full-name">Họ và tên *</label>
                 <input 
+                  id="register-full-name"
                   className="form-input" 
                   placeholder="VD: Nguyễn Văn A"
                   value={registerForm.full_name}
@@ -1832,8 +1752,9 @@ export default function YouTubeXuApp() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Email *</label>
+                <label className="form-label" htmlFor="register-email">Email *</label>
                 <input 
+                  id="register-email"
                   type="email"
                   className="form-input" 
                   placeholder="email@example.com"
@@ -1844,8 +1765,9 @@ export default function YouTubeXuApp() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Số điện thoại *</label>
+                <label className="form-label" htmlFor="register-phone">Số điện thoại *</label>
                 <input 
+                  id="register-phone"
                   className="form-input" 
                   placeholder="0901234567"
                   value={registerForm.phone}
@@ -1855,8 +1777,9 @@ export default function YouTubeXuApp() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Mã giới thiệu (không bắt buộc)</label>
+                <label className="form-label" htmlFor="register-referral">Mã giới thiệu (không bắt buộc)</label>
                 <input
+                  id="register-referral"
                   className="form-input"
                   placeholder="VD: YX00000005"
                   maxLength={20}
@@ -1866,8 +1789,9 @@ export default function YouTubeXuApp() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Mật khẩu *</label>
+                <label className="form-label" htmlFor="register-password">Mật khẩu *</label>
                 <input 
+                  id="register-password"
                   type="password"
                   className="form-input" 
                   placeholder="Mật khẩu của bạn"
@@ -1880,8 +1804,9 @@ export default function YouTubeXuApp() {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
                 <div className="form-group">
-                  <label className="form-label">Năm sinh (từ 16 tuổi) *</label>
+                  <label className="form-label" htmlFor="register-birth-year">Năm sinh (từ 16 tuổi) *</label>
                   <input 
+                    id="register-birth-year"
                     type="number"
                     className="form-input" 
                     value={registerForm.birth_year}
@@ -1891,8 +1816,9 @@ export default function YouTubeXuApp() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Giới tính</label>
+                  <label className="form-label" htmlFor="register-gender">Giới tính</label>
                   <select 
+                    id="register-gender"
                     className="form-select"
                     value={registerForm.gender}
                     onChange={(e) => setRegisterForm({ ...registerForm, gender: e.target.value })}
@@ -1905,8 +1831,9 @@ export default function YouTubeXuApp() {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Tỉnh / Thành phố</label>
+                <label className="form-label" htmlFor="register-province">Tỉnh / Thành phố</label>
                 <input 
+                  id="register-province"
                   className="form-input" 
                   placeholder="Hà Nội, TP.HCM..."
                   value={registerForm.province}

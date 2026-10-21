@@ -1,8 +1,8 @@
 import './globals.css';
 
 export const metadata = {
-  title: 'YouTube Xu - Xem Video Nhận Xu Đổi Thưởng',
-  description: 'Hệ thống nền tảng xem quảng cáo YouTube nhận xu tích lũy, đổi thẻ điện thoại và voucher (Sprint 1 MVP).'
+  title: 'YouTube Xu - Quản lý chiến dịch và đổi quà',
+  description: 'Quản lý chiến dịch quảng cáo, ví Xu và yêu cầu đổi quà trên nền tảng YouTube Xu.'
 };
 
 export default function RootLayout({ children }) {
