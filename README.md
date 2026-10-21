@@ -48,7 +48,21 @@ Mặc định ứng dụng kết nối tới `localhost\SQLEXPRESS`, cơ sở d�
    npm.cmd run dev
    ```
 
-   Mở [http://localhost:3000](http://localhost:3000). Tài khoản demo: `admin@youtubexu.vn`, mật khẩu `123456`.
+   Mở [http://localhost:3000](http://localhost:3000). Cơ sở dữ liệu mẫu có nhiều tài khoản để thử các vai trò:
+
+   | Vai trò | Email đăng nhập | Người dùng |
+   | --- | --- | --- |
+   | Quản trị viên | `admin@youtubexu.vn` | Nguyễn Quản Trị |
+   | Nhà quảng cáo | `adv.vng@gmail.com` | Công ty Cổ phần VNG |
+   | Nhà quảng cáo | `adv.shopee@gmail.com` | Shopee Việt Nam |
+   | Nhà quảng cáo | `adv.vinamilk@gmail.com` | Vinamilk Corporation |
+   | Người xem | `long.tv@gmail.com` | Trần Văn Long |
+   | Người xem | `nhi.lt@gmail.com` | Lê Thị Nhi |
+   | Người xem | `tu.pm@gmail.com` | Phạm Minh Tú |
+   | Người xem | `lam.hm@gmail.com` | Hoàng Mai Lâm |
+   | Người xem | `luong.nv@gmail.com` | Nguyễn Văn Lượng |
+
+   Mật khẩu cho các tài khoản mẫu đang hoạt động là `123456`. Tài khoản `gianlan.bot@gmail.com` bị khóa để phục vụ dữ liệu minh họa, không dùng để đăng nhập thử.
 
 `AUTH_SECRET` dùng để ký phiên đăng nhập; cần giữ bí mật và đặt thành giá trị ngẫu nhiên riêng tối thiểu 32 ký tự ở mọi môi trường. Khối lệnh trên chỉ thêm giá trị nếu chưa có, không ghi đè các cấu hình khác. Không commit hoặc chia sẻ `.env.local`. Có thể đặt `DB_HOST` và `DB_NAME` để đổi máy chủ hoặc tên cơ sở dữ liệu mặc định.
 
