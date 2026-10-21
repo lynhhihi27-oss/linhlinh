@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import crypto from 'crypto';
 import { requireSession } from '@/lib/auth';
 
 export async function PATCH(request, { params }) {
@@ -12,7 +11,13 @@ export async function PATCH(request, { params }) {
 
     const redemptionId = params.id;
     const body = await request.json();
-    const { action } = body;
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ success: false, message: 'Dữ liệu xử lý đơn không hợp lệ.' }, { status: 400 });
+    }
+    const { action, gift_code: submittedGiftCode } = body;
+    if (!/^\d+$/.test(String(redemptionId)) || !['APPROVE', 'REJECT'].includes(action)) {
+      return NextResponse.json({ success: false, message: 'Thông tin xử lý đơn không hợp lệ.' }, { status: 400 });
+    }
 
     await connection.beginTransaction();
 
@@ -36,9 +41,11 @@ export async function PATCH(request, { params }) {
     }
 
     if (action === 'APPROVE') {
-      const codeSuffix = crypto.randomBytes(4).toString('hex').toUpperCase();
-      const codeMid = Math.floor(1000 + Math.random() * 9000);
-      const giftCode = `${order.reward_type === 'PHONE_CARD' ? 'CARD' : 'VOUCHER'}-${codeMid}-${codeSuffix}`;
+      const giftCode = typeof submittedGiftCode === 'string' ? submittedGiftCode.trim() : '';
+      if (!giftCode || giftCode.length > 50) {
+        await connection.rollback();
+        return NextResponse.json({ success: false, message: 'Cần nhập mã quà thực tế do nhà cung cấp cấp (tối đa 50 ký tự).' }, { status: 400 });
+      }
 
       await connection.execute(
         `UPDATE redemptions 
@@ -99,7 +106,7 @@ export async function PATCH(request, { params }) {
   } catch (error) {
     if (connection) await connection.rollback();
     console.error('Process redemption error:', error);
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: 'Không thể xử lý đơn đổi quà lúc này.' }, { status: 500 });
   } finally {
     connection?.release();
   }

@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
-import crypto from 'crypto';
 import { requireSession } from '@/lib/auth';
 
 export async function POST(request) {
@@ -11,11 +10,19 @@ export async function POST(request) {
     connection = await pool.getConnection();
 
     const body = await request.json();
-    const { reward_id } = body;
+    if (!body || typeof body !== 'object' || Array.isArray(body)) {
+      return NextResponse.json({ success: false, message: 'Dữ liệu đổi quà không hợp lệ.' }, { status: 400 });
+    }
+    const { reward_id, request_key: requestKey } = body;
+    const rewardId = Number(reward_id);
     const user_id = auth.user.user_id;
 
-    if (!reward_id) {
-      return NextResponse.json({ success: false, message: 'Thiếu thông tin phần thưởng!' }, { status: 400 });
+    if (
+      !Number.isSafeInteger(rewardId) || rewardId <= 0 ||
+      typeof requestKey !== 'string' ||
+      !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(requestKey)
+    ) {
+      return NextResponse.json({ success: false, message: 'Phần thưởng hoặc mã yêu cầu không hợp lệ.' }, { status: 400 });
     }
 
     await connection.beginTransaction();
@@ -37,10 +44,34 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: 'Tài khoản đang bị khóa, không thể đổi quà!' }, { status: 403 });
     }
 
+    const [previousRequests] = await connection.execute(
+      `SELECT redemption_id, user_id, reward_id, status, gift_code
+       FROM redemptions WHERE request_key = ? FOR UPDATE`,
+      [requestKey]
+    );
+    if (previousRequests.length > 0) {
+      const previous = previousRequests[0];
+      await connection.rollback();
+      if (Number(previous.user_id) !== Number(user_id) || Number(previous.reward_id) !== rewardId) {
+        return NextResponse.json({ success: false, message: 'Mã yêu cầu đã được dùng cho một giao dịch khác.' }, { status: 409 });
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: previous.status === 'REJECTED'
+          ? 'Yêu cầu này đã được xử lý và từ chối trước đó.'
+          : 'Yêu cầu đổi quà này đã được ghi nhận trước đó.',
+        redemption_id: previous.redemption_id,
+        status: previous.status,
+        gift_code: previous.gift_code,
+        balance_after: user.xu_balance
+      });
+    }
+
     // 2. Kiểm tra phần thưởng và tồn kho
     const [rewards] = await connection.execute(
       'SELECT reward_id, reward_name, reward_type, face_value_vnd, xu_cost, stock_qty, is_active FROM rewards WHERE reward_id = ? FOR UPDATE',
-      [reward_id]
+      [rewardId]
     );
 
     if (rewards.length === 0 || !rewards[0].is_active) {
@@ -64,19 +95,6 @@ export async function POST(request) {
       }, { status: 400 });
     }
 
-    // 3. Quy tắc phê duyệt (UC-02):
-    // Với quà <= 50.000đ -> Duyệt tự động (APPROVED) và sinh mã thẻ ngay.
-    // Với quà > 50.000đ -> Chờ Admin phê duyệt (PENDING).
-    let status = 'PENDING';
-    let giftCode = null;
-
-    if (reward.face_value_vnd <= 50000) {
-      status = 'APPROVED';
-      const codeSuffix = crypto.randomBytes(4).toString('hex').toUpperCase();
-      const codeMid = Math.floor(1000 + Math.random() * 9000);
-      giftCode = `${reward.reward_type === 'PHONE_CARD' ? 'CARD' : 'VOUCHER'}-${codeMid}-${codeSuffix}`;
-    }
-
     // 4. Trừ xu người dùng và giảm tồn kho
     const newBalance = user.xu_balance - reward.xu_cost;
     await connection.execute(
@@ -86,14 +104,14 @@ export async function POST(request) {
 
     await connection.execute(
       'UPDATE rewards SET stock_qty = stock_qty - 1 WHERE reward_id = ?',
-      [reward_id]
+      [rewardId]
     );
 
     // 5. Tạo đơn đổi thưởng (REDEMPTIONS)
     const [redemptionResult] = await connection.execute(
-      `INSERT INTO redemptions (user_id, reward_id, xu_spent, gift_code, status, requested_at, processed_at, processed_by)
-       VALUES (?, ?, ?, ?, ?, NOW(), ${status === 'APPROVED' ? 'NOW()' : 'NULL'}, ${status === 'APPROVED' ? '1' : 'NULL'})`,
-      [user_id, reward_id, reward.xu_cost, giftCode, status]
+      `INSERT INTO redemptions (user_id, reward_id, request_key, xu_spent, gift_code, status, requested_at, processed_at, processed_by)
+       VALUES (?, ?, ?, ?, NULL, 'PENDING', NOW(), NULL, NULL)`,
+      [user_id, rewardId, requestKey, reward.xu_cost]
     );
 
     const redemptionId = redemptionResult.insertId;
@@ -109,17 +127,16 @@ export async function POST(request) {
 
     return NextResponse.json({
       success: true,
-      message: status === 'APPROVED' 
-        ? `Đổi quà thành công! Mã thẻ/voucher của bạn là: ${giftCode}`
-        : 'Đơn đổi thưởng đã gửi thành công! Do phần quà có giá trị > 50.000đ, hệ thống sẽ duyệt trong vòng 24 giờ.',
-      status,
-      gift_code: giftCode,
+      message: 'Đã gửi yêu cầu đổi quà. Xu và tồn kho được giữ chỗ; quản trị viên sẽ xác nhận mã quà thực tế.',
+      redemption_id: redemptionId,
+      status: 'PENDING',
+      gift_code: null,
       balance_after: newBalance
     });
   } catch (error) {
     if (connection) await connection.rollback();
     console.error('Redeem error:', error);
-    return NextResponse.json({ success: false, message: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: 'Không thể xử lý yêu cầu đổi quà lúc này.' }, { status: 500 });
   } finally {
     connection?.release();
   }

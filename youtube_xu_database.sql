@@ -144,6 +144,7 @@ CREATE TABLE redemptions (
     redemption_id INT IDENTITY(1,1) PRIMARY KEY,
     user_id       INT NOT NULL,
     reward_id     INT NOT NULL,
+    request_key   VARCHAR(36) NULL,
     xu_spent      INT NOT NULL,
     gift_code     VARCHAR(50) NULL,
     status        VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'DELIVERED', 'REJECTED')),
@@ -183,6 +184,9 @@ CREATE INDEX idx_views_user_date ON ad_views(user_id, view_date);
 CREATE INDEX idx_txn_user_time   ON xu_transactions(user_id, created_at);
 CREATE INDEX idx_ads_status      ON ads(status, start_date, end_date);
 CREATE INDEX idx_redemptions_user ON redemptions(user_id, requested_at);
+CREATE UNIQUE INDEX uq_redemptions_request_key
+    ON redemptions(request_key)
+    WHERE request_key IS NOT NULL;
 GO
 
 -- =====================================================================
