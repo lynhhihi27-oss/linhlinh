@@ -27,9 +27,10 @@ Mặc định ứng dụng kết nối tới `localhost\SQLEXPRESS`, cơ sở d�
    ```powershell
    sqlcmd -S ".\SQLEXPRESS" -E -b -f i:65001 -i ".\migrations\20261020_add_referral_codes.sql"
    sqlcmd -S ".\SQLEXPRESS" -E -b -f i:65001 -i ".\migrations\20261022_add_redemption_idempotency.sql"
+   sqlcmd -S ".\SQLEXPRESS" -E -b -f i:65001 -i ".\migrations\20261022_add_demo_video_campaigns.sql"
    ```
 
-   Migration đổi quà thêm cột khóa yêu cầu tùy chọn và unique index có lọc; các đơn cũ giữ nguyên `NULL`.
+   Các migration không xóa dữ liệu hiện có. Migration video có thể chạy lại an toàn; migration đổi quà thêm cột khóa yêu cầu tùy chọn và unique index có lọc, các đơn cũ giữ nguyên `NULL`.
 
 3. Chạy ứng dụng:
 
@@ -83,6 +84,7 @@ Mặc định ứng dụng kết nối tới `localhost\SQLEXPRESS`, cơ sở d�
 ## Nhắm mục tiêu quảng cáo và giới thiệu bạn bè
 
 - Nhà quảng cáo có thể đặt tuổi tối thiểu/tối đa (16-120); danh sách hiện chỉ áp dụng lọc tuổi đã cấu hình.
+- Danh sách video được tách riêng theo từng danh mục. Script khởi tạo có thêm 18 chiến dịch video mẫu đang hoạt động, chia đều 3 video cho mỗi danh mục.
 - Mỗi tài khoản có mã giới thiệu riêng. Phần thưởng giới thiệu chỉ có thể được phát sau khi tích hợp và xác minh lượt xem hợp lệ; tính năng nhận Xu hiện bị khóa nên không phát sinh thưởng mới.
 - Các tài khoản mẫu dùng mã giới thiệu `YX00000001` đến `YX00000010`. Có thể xem và sao chép mã cá nhân tại tab **Ví xu**.
 

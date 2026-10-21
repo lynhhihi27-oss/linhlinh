@@ -235,7 +235,26 @@ INSERT INTO ads (ad_id, advertiser_id, category_id, title, video_url, duration_s
 (3, 4, 4, N'Sữa tươi Vinamilk 100% - Năng Lượng Cho Cả Gia Đình', 'https://www.youtube.com/watch?v=3JZ_D3ELwOQ', 45, 20, 20000, 8400, '2026-10-05', '2026-11-05', 'ACTIVE', NULL, 1, '2026-10-02 14:00:00'),
 (4, 2, 2, N'Khóa Học Lập Trình Python Căn Bản Từ Zero Đến Hero', 'https://www.youtube.com/watch?v=rfscVS0vtbw', 25, 10, 5000, 0, '2026-10-15', '2026-11-15', 'PENDING', NULL, NULL, '2026-10-14 09:00:00'),
 (5, 2, 1, N'Đại Chiến Bang Hội - Giải Đấu Mùa Thu VNG', 'https://www.youtube.com/watch?v=2Vv-BfVoq4g', 30, 10, 10000, 10000, '2026-09-01', '2026-09-30', 'ENDED', NULL, 1, '2026-08-25 08:30:00'),
-(6, 3, 5, N'Đầu tư tiền ảo cam kết lãi 500%/tháng không rủi ro', 'https://www.youtube.com/watch?v=fakecrypto', 20, 10, 5000, 0, '2026-10-10', '2026-10-20', 'REJECTED', N'Nội dung vi phạm quy định: Quảng cáo cờ bạc/lừa đảo tài chính', 1, '2026-10-09 17:00:00');
+(6, 3, 5, N'Đầu tư tiền ảo cam kết lãi 500%/tháng không rủi ro', 'https://www.youtube.com/watch?v=fakecrypto', 20, 10, 5000, 0, '2026-10-10', '2026-10-20', 'REJECTED', N'Nội dung vi phạm quy định: Quảng cáo cờ bạc/lừa đảo tài chính', 1, '2026-10-09 17:00:00'),
+-- Video mẫu đang hoạt động, chia đều theo sáu danh mục để trình diễn giao diện
+(7, 2, 1, N'Game nhập vai - Khám phá thế giới mới', 'https://www.youtube.com/watch?v=9bZkp7q19f0', 30, 10, 12000, 0, '2026-10-01', '2026-12-31', 'ACTIVE', NULL, 1, '2026-10-15 09:00:00'),
+(8, 2, 1, N'Thể thao điện tử - Khoảnh khắc thi đấu nổi bật', 'https://www.youtube.com/watch?v=JGwWNGJdvx8', 25, 8, 10000, 1200, '2026-10-01', '2026-12-31', 'ACTIVE', NULL, 1, '2026-10-15 09:10:00'),
+(9, 3, 1, N'Trải nghiệm trò chơi mới dành cho game thủ', 'https://www.youtube.com/watch?v=CevxZvSJLk8', 35, 12, 15000, 2400, '2026-10-01', '2026-12-31', 'ACTIVE', NULL, 1, '2026-10-15 09:20:00'),
+(10, 2, 2, N'Học Python cơ bản qua ví dụ thực hành', 'https://www.youtube.com/watch?v=kqtD5dpn9C8', 30, 10, 8000, 0, '2026-10-01', '2026-12-31', 'ACTIVE', NULL, 1, '2026-10-15 10:00:00'),
+(11, 2, 2, N'JavaScript cho người mới bắt đầu', 'https://www.youtube.com/watch?v=W6NZfCO5SIk', 30, 10, 8000, 800, '2026-10-01', '2026-12-31', 'ACTIVE', NULL, 1, '2026-10-15 10:10:00'),
+(12, 4, 2, N'Lập trình web - Xây dựng dự án đầu tiên', 'https://www.youtube.com/watch?v=PkZNo7MFNFg', 40, 15, 12000, 1500, '2026-10-01', '2026-12-31', 'ACTIVE', NULL, 1, '2026-10-15 10:20:00'),
+(13, 3, 3, N'Gợi ý phong cách thời trang hằng ngày', 'https://www.youtube.com/watch?v=YQHsXMglC9A', 25, 8, 9000, 0, '2026-10-01', '2026-12-31', 'ACTIVE', NULL, 1, '2026-10-15 11:00:00'),
+(14, 3, 3, N'Bí quyết chăm sóc da và làm đẹp', 'https://www.youtube.com/watch?v=fRh_vgS2dFE', 30, 10, 10000, 1000, '2026-10-01', '2026-12-31', 'ACTIVE', NULL, 1, '2026-10-15 11:10:00'),
+(15, 3, 3, N'Bộ sưu tập phong cách mới mùa này', 'https://www.youtube.com/watch?v=3tmd-ClpJxA', 20, 7, 7000, 700, '2026-10-01', '2026-12-31', 'ACTIVE', NULL, 1, '2026-10-15 11:20:00'),
+(16, 4, 4, N'Công thức bữa sáng nhanh gọn tại nhà', 'https://www.youtube.com/watch?v=5qap5aO4i9A', 30, 10, 9000, 0, '2026-10-01', '2026-12-31', 'ACTIVE', NULL, 1, '2026-10-15 13:00:00'),
+(17, 4, 4, N'Khám phá món ngon cho cả gia đình', 'https://www.youtube.com/watch?v=ScMzIvxBSi4', 35, 12, 11000, 900, '2026-10-01', '2026-12-31', 'ACTIVE', NULL, 1, '2026-10-15 13:10:00'),
+(18, 4, 4, N'Pha chế đồ uống mát lạnh tại nhà', 'https://www.youtube.com/watch?v=aqz-KE-bpKQ', 25, 8, 8000, 600, '2026-10-01', '2026-12-31', 'ACTIVE', NULL, 1, '2026-10-15 13:20:00'),
+(19, 2, 5, N'Giới thiệu thiết bị công nghệ mới', 'https://www.youtube.com/watch?v=M7lc1UVf-VE', 30, 10, 10000, 0, '2026-10-01', '2026-12-31', 'ACTIVE', NULL, 1, '2026-10-15 14:00:00'),
+(20, 3, 5, N'Mẹo sử dụng máy tính hiệu quả', 'https://www.youtube.com/watch?v=8mAITcNt710', 30, 10, 10000, 1000, '2026-10-01', '2026-12-31', 'ACTIVE', NULL, 1, '2026-10-15 14:10:00'),
+(21, 4, 5, N'Khám phá phụ kiện công nghệ tiện ích', 'https://www.youtube.com/watch?v=2ePf9rue1Ao', 25, 8, 8000, 500, '2026-10-01', '2026-12-31', 'ACTIVE', NULL, 1, '2026-10-15 14:20:00'),
+(22, 3, 6, N'Gợi ý điểm đến cho chuyến du lịch hè', 'https://www.youtube.com/watch?v=LsoLEjrDogU', 35, 12, 12000, 0, '2026-10-01', '2026-12-31', 'ACTIVE', NULL, 1, '2026-10-15 15:00:00'),
+(23, 4, 6, N'Khám phá cảnh đẹp và trải nghiệm địa phương', 'https://www.youtube.com/watch?v=60ItHLz5WEA', 30, 10, 10000, 900, '2026-10-01', '2026-12-31', 'ACTIVE', NULL, 1, '2026-10-15 15:10:00'),
+(24, 2, 6, N'Kinh nghiệm chuẩn bị hành lý du lịch', 'https://www.youtube.com/watch?v=QH2-TGUlwu4', 25, 8, 8000, 400, '2026-10-01', '2026-12-31', 'ACTIVE', NULL, 1, '2026-10-15 15:20:00');
 SET IDENTITY_INSERT ads OFF;
 GO
 

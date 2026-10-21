@@ -512,6 +512,15 @@ export default function YouTubeXuApp() {
     }
   };
 
+  const displayedAdGroups = selectedCategory
+    ? [{ category_id: selectedCategory, category_name: ads[0]?.category_name, ads }]
+    : categories
+      .map(category => ({
+        ...category,
+        ads: ads.filter(ad => String(ad.category_id) === String(category.category_id))
+      }))
+      .filter(category => category.ads.length > 0);
+
   return (
     <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
       
@@ -822,15 +831,24 @@ export default function YouTubeXuApp() {
                 </p>
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '22px' }}>
-                {ads.map(ad => (
-                  <div key={ad.ad_id} className="glass-panel" style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    overflow: 'hidden',
-                    transition: 'transform 0.2s, box-shadow 0.2s',
-                    position: 'relative'
-                  }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '32px' }}>
+                {displayedAdGroups.map(group => (
+                  <section key={group.category_id} aria-labelledby={`category-${group.category_id}`}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+                      <h2 id={`category-${group.category_id}`} style={{ fontSize: '1.15rem', fontWeight: 800 }}>
+                        {group.category_name}
+                      </h2>
+                      <span className="badge badge-blue">{group.ads.length} video</span>
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(340px, 1fr))', gap: '22px' }}>
+                      {group.ads.map(ad => (
+                        <div key={ad.ad_id} className="glass-panel" style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          overflow: 'hidden',
+                          transition: 'transform 0.2s, box-shadow 0.2s',
+                          position: 'relative'
+                        }}>
                     {/* Video Thumbnail Header */}
                     <div style={{
                       position: 'relative',
@@ -916,7 +934,10 @@ export default function YouTubeXuApp() {
                         )}
                       </div>
                     </div>
-                  </div>
+                        </div>
+                      ))}
+                    </div>
+                  </section>
                 ))}
               </div>
             )}
