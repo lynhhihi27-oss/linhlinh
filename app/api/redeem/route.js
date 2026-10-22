@@ -92,12 +92,56 @@ export async function POST(request) {
 
     const redemptionId = redemptionResult.insertId;
 
-    // 6. Ghi sổ cái XU_TRANSACTIONS loại REDEEM
+    // 6. Ghi sổ cái XU_TRANSACTIONS loại REDEEM cho người đổi
     await connection.execute(
       `INSERT INTO xu_transactions (user_id, view_id, redemption_id, txn_type, amount, balance_after, note, created_at)
        VALUES (?, NULL, ?, 'REDEEM', ?, ?, ?, NOW())`,
       [user_id, redemptionId, -reward.xu_cost, newBalance, `Đổi ${reward.reward_name}`]
     );
+
+    // 7. HOA HỒNG AFFILIATE (Người giới thiệu nhận hoa hồng 5% khi bạn bè đổi quà)
+    const [redeemerInfo] = await connection.execute(
+      'SELECT full_name, referred_by FROM users WHERE user_id = ?',
+      [user_id]
+    );
+
+    const referrerId = redeemerInfo[0]?.referred_by;
+    let affiliateBonus = 0;
+
+    if (referrerId) {
+      // 5% số xu đổi quà của bạn bè (tối thiểu 50 xu)
+      const commissionRate = 0.05;
+      affiliateBonus = Math.max(50, Math.round(reward.xu_cost * commissionRate));
+
+      const [referrerRows] = await connection.execute(
+        'SELECT user_id, full_name, account_status, xu_balance FROM users WHERE user_id = ? FOR UPDATE',
+        [referrerId]
+      );
+
+      if (referrerRows.length > 0 && referrerRows[0].account_status === 'ACTIVE') {
+        const referrer = referrerRows[0];
+        const newRefBalance = referrer.xu_balance + affiliateBonus;
+
+        // Cộng xu vào ví người giới thiệu
+        await connection.execute(
+          'UPDATE users SET xu_balance = ? WHERE user_id = ?',
+          [newRefBalance, referrerId]
+        );
+
+        // Ghi sổ cái XU_TRANSACTIONS loại BONUS cho người giới thiệu
+        await connection.execute(
+          `INSERT INTO xu_transactions (user_id, view_id, redemption_id, txn_type, amount, balance_after, note, created_at)
+           VALUES (?, NULL, ?, 'BONUS', ?, ?, ?, NOW())`,
+          [
+            referrerId,
+            redemptionId,
+            affiliateBonus,
+            newRefBalance,
+            `Hoa hồng Affiliate (${Math.round(commissionRate * 100)}%): Bạn bè [${redeemerInfo[0].full_name}] đổi quà: ${reward.reward_name}`
+          ]
+        );
+      }
+    }
 
     await connection.commit();
 

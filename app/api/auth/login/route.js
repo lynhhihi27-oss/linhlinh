@@ -42,7 +42,7 @@ export async function POST(request) {
     if (!isDefaultPassword && !isHashMatched && !(isBcryptSample && password === '123456')) {
       return NextResponse.json({
         success: false,
-        message: 'Mật khẩu không chính xác! (Mật khẩu mặc định demo là: 123456)'
+        message: 'Mật khẩu không chính xác!'
       }, { status: 401 });
     }
 

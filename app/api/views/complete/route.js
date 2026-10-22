@@ -93,12 +93,56 @@ export async function POST(request) {
     );
     const newBalance = updatedUsers[0].xu_balance;
 
-    // 6. Ghi sổ cái XU_TRANSACTIONS loại EARN
+    // 6. Ghi sổ cái XU_TRANSACTIONS loại EARN cho người xem
     await connection.execute(
       `INSERT INTO xu_transactions (user_id, view_id, redemption_id, txn_type, amount, balance_after, note, created_at)
        VALUES (?, ?, NULL, 'EARN', ?, ?, ?, NOW())`,
       [user_id, currentView.view_id, reward, newBalance, `Xem hoàn tất quảng cáo: ${ad.title}`]
     );
+
+    // 7. HOA HỒNG AFFILIATE (Người giới thiệu nhận hoa hồng 20% khi bạn bè xem video)
+    const [viewerInfo] = await connection.execute(
+      'SELECT full_name, referred_by FROM users WHERE user_id = ?',
+      [user_id]
+    );
+
+    const referrerId = viewerInfo[0]?.referred_by;
+    let affiliateBonus = 0;
+
+    if (referrerId) {
+      // 20% hoa hồng từ lượt xem (tối thiểu 1 xu)
+      const commissionRate = 0.20;
+      affiliateBonus = Math.max(1, Math.round(reward * commissionRate));
+
+      const [referrerRows] = await connection.execute(
+        'SELECT user_id, full_name, account_status, xu_balance FROM users WHERE user_id = ? FOR UPDATE',
+        [referrerId]
+      );
+
+      if (referrerRows.length > 0 && referrerRows[0].account_status === 'ACTIVE') {
+        const referrer = referrerRows[0];
+        const newRefBalance = referrer.xu_balance + affiliateBonus;
+
+        // Cộng xu vào ví người giới thiệu
+        await connection.execute(
+          'UPDATE users SET xu_balance = ? WHERE user_id = ?',
+          [newRefBalance, referrerId]
+        );
+
+        // Ghi sổ cái XU_TRANSACTIONS loại BONUS cho người giới thiệu
+        await connection.execute(
+          `INSERT INTO xu_transactions (user_id, view_id, redemption_id, txn_type, amount, balance_after, note, created_at)
+           VALUES (?, ?, NULL, 'BONUS', ?, ?, ?, NOW())`,
+          [
+            referrerId,
+            currentView.view_id,
+            affiliateBonus,
+            newRefBalance,
+            `Hoa hồng Affiliate (${Math.round(commissionRate * 100)}%): Bạn bè [${viewerInfo[0].full_name}] hoàn tất video: ${ad.title}`
+          ]
+        );
+      }
+    }
 
     await connection.commit();
 

@@ -4,13 +4,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { 
   Play, CheckCircle2, Clock, Coins, Gift, Wallet, ShieldAlert, 
   BarChart3, PlusCircle, AlertTriangle, UserCheck, Lock, Unlock, 
-  Copy, ExternalLink, RefreshCw, Filter, Sparkles, Award, ArrowUpRight, ArrowDownLeft
+  Copy, ExternalLink, RefreshCw, Filter, Sparkles, Award, ArrowUpRight, ArrowDownLeft,
+  Users, Share2, Link as LinkIcon
 } from 'lucide-react';
 
 export default function YouTubeXuApp() {
   // Current active user & role
   const [currentUser, setCurrentUser] = useState(null);
-  const [activeTab, setActiveTab] = useState('watch'); // 'watch' | 'rewards' | 'wallet' | 'advertiser' | 'admin'
+  const [activeTab, setActiveTab] = useState('watch'); // 'watch' | 'rewards' | 'wallet' | 'affiliate' | 'advertiser' | 'admin'
   const [isLoading, setIsLoading] = useState(true);
   const [notification, setNotification] = useState(null);
 
@@ -24,6 +25,10 @@ export default function YouTubeXuApp() {
   const [adminStats, setAdminStats] = useState(null);
   const [adminAds, setAdminAds] = useState([]);
   const [fraudData, setFraudData] = useState({ suspicious_users: [], recent_invalid_views: [] });
+
+  // Affiliate state
+  const [affiliateData, setAffiliateData] = useState(null);
+  const [isAffiliateLoading, setIsAffiliateLoading] = useState(false);
 
   // Watch modal state (UC-01)
   const [watchingAd, setWatchingAd] = useState(null);
@@ -197,6 +202,7 @@ export default function YouTubeXuApp() {
   };
 
   // Load Admin Data
+  // Load Admin Data
   const loadAdminData = async () => {
     try {
       const [statsRes, adsRes, fraudRes] = await Promise.all([
@@ -212,10 +218,38 @@ export default function YouTubeXuApp() {
     }
   };
 
+  // Load Affiliate Data
+  const loadAffiliateData = async () => {
+    if (!currentUser || currentUser.user_id === 0) return;
+    try {
+      setIsAffiliateLoading(true);
+      const res = await fetch(`/api/affiliate?userId=${currentUser.user_id}`);
+      const data = await res.json();
+      if (data.success) {
+        setAffiliateData(data);
+      }
+    } catch (err) {
+      console.error('Error loading affiliate data:', err);
+    } finally {
+      setIsAffiliateLoading(false);
+    }
+  };
+
   useEffect(() => {
     loadUser('5');
     loadCategories();
     loadRewards();
+
+    // Tự động nhận diện mã giới thiệu nếu truy cập qua link ?ref=...
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const refCode = urlParams.get('ref');
+      if (refCode) {
+        setRegisterForm(prev => ({ ...prev, referral_code: refCode }));
+        setShowRegisterModal(true);
+        showToast(`Đã nhận diện mã giới thiệu bạn bè: ${refCode}`, 'success');
+      }
+    }
   }, []);
 
   useEffect(() => {
@@ -223,6 +257,7 @@ export default function YouTubeXuApp() {
     if (activeTab === 'watch') loadAds();
     if (activeTab === 'rewards') loadRedemptions();
     if (activeTab === 'wallet') loadWallet();
+    if (activeTab === 'affiliate') loadAffiliateData();
     if (activeTab === 'advertiser') loadAdvertiserAds();
     if (activeTab === 'admin') {
       loadAdminData();
@@ -662,6 +697,21 @@ export default function YouTubeXuApp() {
               <span>Ví Xu</span>
             </button>
 
+            <button 
+              className="btn btn-sm"
+              style={{
+                background: activeTab === 'affiliate' ? 'var(--bg-surface-hover)' : 'transparent',
+                color: activeTab === 'affiliate' ? '#fff' : 'var(--text-muted)',
+                fontWeight: activeTab === 'affiliate' ? 700 : 500,
+                border: activeTab === 'affiliate' ? '1px solid var(--border-subtle)' : '1px solid transparent'
+              }}
+              onClick={() => setActiveTab('affiliate')}
+            >
+              <Users size={16} color="#a855f7" />
+              <span>Giới Thiệu</span>
+              <span style={{ fontSize: '0.62rem', padding: '1px 6px', borderRadius: '4px', background: 'rgba(168, 85, 247, 0.2)', color: '#c084fc', fontWeight: 700 }}>+Hoa hồng</span>
+            </button>
+
             {/* Tab dành cho Advertiser */}
             {(currentUser?.system_role === 'ADVERTISER' || currentUser?.system_role === 'ADMIN') && (
               <button 
@@ -702,7 +752,7 @@ export default function YouTubeXuApp() {
             
             {/* Quick Demo Selector */}
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600 }}>Chuyển Vai Trò Nhanh:</span>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-dim)', fontWeight: 600 }}> Nhanh:</span>
               <select 
                 className="form-select"
                 style={{ padding: '6px 10px', fontSize: '0.8rem', width: 'auto' }}
@@ -1200,6 +1250,257 @@ export default function YouTubeXuApp() {
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* ========================================================
+            TAB: AFFILIATE (GIỚI THIỆU BẠN BÈ & HOA HỒNG TÍCH LŨY)
+        ======================================================== */}
+        {activeTab === 'affiliate' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '26px' }}>
+            
+            {/* Banner Hero Giới Thiệu */}
+            <div className="glass-panel" style={{
+              padding: '30px',
+              background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(236, 72, 153, 0.1))',
+              borderColor: 'rgba(139, 92, 246, 0.3)',
+              position: 'relative',
+              overflow: 'hidden'
+            }}>
+              <div style={{ position: 'relative', zIndex: 2, maxWidth: '900px' }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', background: 'rgba(139, 92, 246, 0.25)', color: '#c084fc', padding: '4px 12px', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700, marginBottom: '12px' }}>
+                  <Sparkles size={14} /> CHƯƠNG TRÌNH AFFILIATE YOUTUBE XU
+                </div>
+                <h2 style={{ fontSize: '1.9rem', fontWeight: 800, letterSpacing: '-0.5px', marginBottom: '10px' }}>
+                  Giới Thiệu Bạn Bè — <span style={{ background: 'linear-gradient(90deg, #c084fc, #f472b6)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>Hưởng Hoa Hồng Kép Trọn Đời</span>
+                </h2>
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', lineHeight: 1.6, marginBottom: '22px' }}>
+                  Mời bạn bè cùng xem video kiếm xu trên YouTube Xu để cùng tích lũy và hưởng chính sách hoa hồng tự động: <br />
+                  ✨ <strong>20% Xu thưởng</strong> mỗi khi bạn bè xem video hoàn tất (Ví dụ: Bạn bè nhận 10 xu → Bạn nhận ngay +2 xu).<br />
+                  🎁 <strong>5% Giá trị quà</strong> mỗi khi bạn bè thực hiện đổi thẻ cào/voucher (Ví dụ: Bạn bè đổi thẻ 1.000 xu → Bạn nhận ngay +50 xu).
+                </p>
+
+                {/* Box Mã & Link Giới Thiệu */}
+                {currentUser?.user_id !== 0 ? (
+                  <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    alignItems: 'center',
+                    gap: '14px',
+                    background: 'rgba(10, 10, 15, 0.65)',
+                    padding: '16px 20px',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(139, 92, 246, 0.3)'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ fontSize: '0.85rem', color: 'var(--text-dim)', fontWeight: 600 }}>Mã Giới Thiệu:</span>
+                      <span style={{ fontSize: '1.2rem', fontWeight: 800, color: '#fcd34d', letterSpacing: '1px', background: 'rgba(245, 158, 11, 0.15)', padding: '4px 10px', borderRadius: '6px', border: '1px dashed #f59e0b' }}>
+                        {affiliateData?.referral_code || ('YX' + String(currentUser?.user_id).padStart(8, '0'))}
+                      </span>
+                      <button 
+                        type="button"
+                        className="btn btn-sm btn-secondary" 
+                        onClick={() => {
+                          const code = affiliateData?.referral_code || ('YX' + String(currentUser?.user_id).padStart(8, '0'));
+                          navigator.clipboard.writeText(code);
+                          showToast(`Đã sao chép mã giới thiệu: ${code}`, 'success');
+                        }}
+                      >
+                        <Copy size={14} /> Sao Chép
+                      </button>
+                    </div>
+
+                    <div style={{ width: '1px', height: '28px', background: 'var(--border-subtle)' }} />
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flex: 1, minWidth: '280px' }}>
+                      <input 
+                        readOnly 
+                        className="form-input" 
+                        style={{ fontSize: '0.85rem', padding: '8px 12px', background: 'rgba(255,255,255,0.05)', color: '#c084fc' }}
+                        value={typeof window !== 'undefined' ? `${window.location.origin}/?ref=${affiliateData?.referral_code || ('YX' + String(currentUser?.user_id).padStart(8, '0'))}` : ''}
+                      />
+                      <button 
+                        type="button"
+                        className="btn btn-sm btn-primary"
+                        onClick={() => {
+                          const link = `${window.location.origin}/?ref=${affiliateData?.referral_code || ('YX' + String(currentUser?.user_id).padStart(8, '0'))}`;
+                          navigator.clipboard.writeText(link);
+                          showToast('Đã sao chép link mời bạn bè!', 'success');
+                        }}
+                      >
+                        <Share2 size={14} /> Sao Chép Link
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ padding: '12px 18px', background: 'rgba(239, 68, 68, 0.1)', borderRadius: '8px', border: '1px solid rgba(239, 68, 68, 0.2)', color: '#fca5a5', fontSize: '0.9rem' }}>
+                    Vui lòng đăng nhập hoặc chọn tài khoản Người xem để lấy mã giới thiệu và theo dõi hoa hồng của bạn.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* 4 Thẻ Chỉ Số KPI Hoa Hồng */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '16px' }}>
+              <div className="glass-panel" style={{ padding: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>Bạn Bè Đã Mời</span>
+                  <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'rgba(59, 130, 246, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Users size={18} color="#3b82f6" />
+                  </div>
+                </div>
+                <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#fff' }}>
+                  {affiliateData?.stats?.total_friends || 0} <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)', fontWeight: 500 }}>người</span>
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#60a5fa', marginTop: '4px' }}>Mạng lưới cấp dưới trực tiếp</div>
+              </div>
+
+              <div className="glass-panel" style={{ padding: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>Tổng Hoa Hồng Tích Lũy</span>
+                  <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Coins size={18} color="#f59e0b" />
+                  </div>
+                </div>
+                <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#fcd34d' }}>
+                  +{Number(affiliateData?.stats?.total_commission || 0).toLocaleString()} <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)', fontWeight: 500 }}>xu</span>
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#34d399', marginTop: '4px' }}>Đã cộng vào số dư ví của bạn</div>
+              </div>
+
+              <div className="glass-panel" style={{ padding: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>Hoa Hồng Xem Video (20%)</span>
+                  <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'rgba(16, 185, 129, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Play size={18} color="#10b981" />
+                  </div>
+                </div>
+                <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#34d399' }}>
+                  +{Number(affiliateData?.stats?.commission_from_views || 0).toLocaleString()} <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)', fontWeight: 500 }}>xu</span>
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '4px' }}>Tự động cộng sau mỗi lượt xem</div>
+              </div>
+
+              <div className="glass-panel" style={{ padding: '20px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)', fontWeight: 600 }}>Hoa Hồng Đổi Quà (5%)</span>
+                  <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'rgba(236, 72, 153, 0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <Gift size={18} color="#ec4899" />
+                  </div>
+                </div>
+                <div style={{ fontSize: '1.8rem', fontWeight: 800, color: '#f472b6' }}>
+                  +{Number(affiliateData?.stats?.commission_from_redemptions || 0).toLocaleString()} <span style={{ fontSize: '0.9rem', color: 'var(--text-dim)', fontWeight: 500 }}>xu</span>
+                </div>
+                <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)', marginTop: '4px' }}>Thưởng thêm khi bạn bè đổi quà</div>
+              </div>
+            </div>
+
+            {/* Bảng Danh Sách Bạn Bè & Lịch Sử Hoa Hồng */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', gap: '24px', alignItems: 'start' }}>
+              
+              {/* Cột 1: Danh sách bạn bè đã mời */}
+              <div className="glass-panel" style={{ padding: '24px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Users size={18} color="#a855f7" /> Bạn Bè Đã Giới Thiệu ({affiliateData?.friends?.length || 0})
+                  </h3>
+                  <button type="button" className="btn btn-sm btn-secondary" onClick={loadAffiliateData}>
+                    <RefreshCw size={13} /> Làm Mới
+                  </button>
+                </div>
+
+                {!affiliateData?.friends || affiliateData.friends.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '36px 20px', color: 'var(--text-muted)' }}>
+                    <Users size={40} color="var(--text-dim)" style={{ margin: '0 auto 10px', opacity: 0.5 }} />
+                    <p style={{ fontWeight: 600, marginBottom: '6px' }}>Bạn chưa có bạn bè nào tham gia qua mã mời.</p>
+                    <p style={{ fontSize: '0.82rem' }}>Hãy chia sẻ mã hoặc link ở trên cho bạn bè để bắt đầu nhận hoa hồng nhé!</p>
+                  </div>
+                ) : (
+                  <div style={{ overflowX: 'auto' }}>
+                    <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.88rem' }}>
+                      <thead>
+                        <tr style={{ borderBottom: '1px solid var(--border-subtle)', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                          <th style={{ padding: '10px 8px' }}>Họ và Tên</th>
+                          <th style={{ padding: '10px 8px' }}>Ngày tham gia</th>
+                          <th style={{ padding: '10px 8px', textAlign: 'center' }}>Đã xem</th>
+                          <th style={{ padding: '10px 8px', textAlign: 'center' }}>Đổi quà</th>
+                          <th style={{ padding: '10px 8px', textAlign: 'right' }}>Hoa hồng đem lại</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {affiliateData.friends.map(f => (
+                          <tr key={f.user_id} style={{ borderBottom: '1px solid rgba(255, 255, 255, 0.04)' }}>
+                            <td style={{ padding: '12px 8px' }}>
+                              <div style={{ fontWeight: 700, color: '#fff' }}>{f.full_name}</div>
+                              <div style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>{f.phone || f.email}</div>
+                            </td>
+                            <td style={{ padding: '12px 8px', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
+                              {new Date(f.created_at).toLocaleDateString('vi-VN')}
+                            </td>
+                            <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                              <span className="badge badge-blue">{f.total_views} video</span>
+                            </td>
+                            <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                              <span className="badge badge-gold">{f.total_redemptions} quà</span>
+                            </td>
+                            <td style={{ padding: '12px 8px', textAlign: 'right', fontWeight: 700, color: '#34d399' }}>
+                              +{Number(f.commission_earned || 0).toLocaleString()} xu
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* Cột 2: Lịch sử nhận hoa hồng chi tiết */}
+              <div className="glass-panel" style={{ padding: '24px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
+                  <h3 style={{ fontSize: '1.15rem', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <Sparkles size={18} color="#f59e0b" /> Nhật Ký Hoa Hồng Thời Gian Thực
+                  </h3>
+                  <span className="badge badge-green" style={{ fontSize: '0.75rem' }}>Tự động qua Sổ cái</span>
+                </div>
+
+                {!affiliateData?.history || affiliateData.history.length === 0 ? (
+                  <div style={{ textAlign: 'center', padding: '36px 20px', color: 'var(--text-muted)' }}>
+                    <Coins size={40} color="var(--text-dim)" style={{ margin: '0 auto 10px', opacity: 0.5 }} />
+                    <p style={{ fontWeight: 600, marginBottom: '6px' }}>Chưa có biến động hoa hồng.</p>
+                    <p style={{ fontSize: '0.82rem' }}>Khi bạn bè xem video hoặc đổi quà, số xu hoa hồng sẽ hiện ngay tại đây!</p>
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', maxHeight: '450px', overflowY: 'auto' }}>
+                    {affiliateData.history.map(item => (
+                      <div key={item.txn_id} style={{
+                        padding: '12px 14px',
+                        borderRadius: '10px',
+                        background: 'rgba(255, 255, 255, 0.03)',
+                        border: '1px solid var(--border-subtle)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: '12px'
+                      }}>
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontSize: '0.86rem', color: 'var(--text-main)', fontWeight: 600, lineHeight: 1.4 }}>
+                            {item.note}
+                          </div>
+                          <div style={{ fontSize: '0.74rem', color: 'var(--text-dim)', marginTop: '4px' }}>
+                            {new Date(item.created_at).toLocaleString('vi-VN')} • Số dư sau: {item.balance_after?.toLocaleString()} xu
+                          </div>
+                        </div>
+                        <div style={{ fontSize: '1.05rem', fontWeight: 800, color: '#34d399', whiteSpace: 'nowrap' }}>
+                          +{item.amount} xu
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+            </div>
+
           </div>
         )}
 
@@ -1932,6 +2233,20 @@ export default function YouTubeXuApp() {
                   placeholder="Hà Nội, TP.HCM..."
                   value={registerForm.province}
                   onChange={(e) => setRegisterForm({ ...registerForm, province: e.target.value })}
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between' }}>
+                  <span>Mã người giới thiệu</span>
+                  <span style={{ fontSize: '0.75rem', color: '#a855f7' }}>Không bắt buộc</span>
+                </label>
+                <input 
+                  className="form-input" 
+                  placeholder="Nhập mã giới thiệu (VD: YX00000005) nếu có"
+                  value={registerForm.referral_code || ''}
+                  onChange={(e) => setRegisterForm({ ...registerForm, referral_code: e.target.value })}
+                  style={{ borderColor: registerForm.referral_code ? '#a855f7' : undefined }}
                 />
               </div>
 
