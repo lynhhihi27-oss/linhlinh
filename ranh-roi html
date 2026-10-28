@@ -1,0 +1,26 @@
+const videos = [
+  { title:"Thử thách 24 giờ không dùng điện thoại", category:"Thử thách", emoji:"📵", color:"#e76f51", id:"" },
+  { title:"Mukbang gà rán cả nhà ăn không hết",     category:"Ăn uống",   emoji:"🍗", color:"#f4a261", id:"" },
+  { title:"ASMR tiếng mưa rơi thư giãn",            category:"Thư giãn",  emoji:"🌧️", color:"#457b9d", id:"" },
+  // ... các video còn lại
+];
+function renderChips() {
+  const cats = ["Tất cả", ...new Set(videos.map(v => v.category))];
+  cats.forEach(c => {
+    const b = document.createElement("button");
+    b.className = "chip" + (c === activeCat ? " active" : "");
+    b.textContent = c;
+    b.onclick = () => {
+      activeCat = c;
+      document.querySelectorAll(".chip").forEach(x => x.classList.remove("active"));
+      b.classList.add("active");
+      render();
+    };
+    chipsBox.appendChild(b);
+  });
+}
+const list = videos.filter(v =>
+  (activeCat === "Tất cả" || v.category === activeCat) &&
+  (norm(v.title).includes(key) || norm(v.category).includes(key))
+);
+{ title:"Học nấu ăn cho người mới", category:"Học tập", emoji:"📚", color:"#2a9d8f", id:"" },
