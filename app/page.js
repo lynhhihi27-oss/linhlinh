@@ -371,6 +371,31 @@ export default function YouTubeXuApp() {
     }
   };
 
+  const handleCampaignStatusChange = async (ad, status) => {
+    if (status === 'ENDED' && !window.confirm(`Kết thúc chiến dịch "${ad.title}"? Thao tác này không thể hoàn tác.`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/ads/${ad.ad_id}/status`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        showToast(data.message || 'Không thể cập nhật chiến dịch.', 'error');
+        return;
+      }
+
+      showToast(data.message, 'success');
+      loadAdvertiserAds();
+    } catch (err) {
+      console.error(err);
+      showToast('Không thể kết nối để cập nhật chiến dịch.', 'error');
+    }
+  };
+
   // UC-05: Admin duyệt / từ chối quảng cáo
   const handleReviewAd = async (adId, status, rejectReason = '') => {
     try {
@@ -1474,6 +1499,24 @@ export default function YouTubeXuApp() {
                           background: item.spent_xu >= item.budget_xu ? '#f43f5e' : '#10b981'
                         }} />
                       </div>
+                        {['ACTIVE', 'PAUSED'].includes(item.status) && (
+                          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '14px' }}>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => handleCampaignStatusChange(item, item.status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE')}
+                            >
+                              {item.status === 'ACTIVE' ? 'Tạm dừng' : 'Tiếp tục'}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-secondary btn-sm"
+                              onClick={() => handleCampaignStatusChange(item, 'ENDED')}
+                            >
+                              Kết thúc
+                            </button>
+                          </div>
+                        )}
                     </div>
                   ))}
                 </div>
