@@ -73,6 +73,9 @@ Mặc định ứng dụng kết nối tới `localhost\SQLEXPRESS`, cơ sở d�
 - Quyền và danh tính được đọc từ cơ sở dữ liệu ở backend cho mỗi API request; không thể đổi tài khoản bằng cách sửa `userId` hoặc `role` gửi từ trình duyệt.
 - Tài khoản mới cần mật khẩu từ 8 ký tự. Mật khẩu được băm bằng scrypt; mật khẩu mẫu cũ `123456` chỉ dùng với tài khoản khởi tạo và được nâng cấp sang hash mới sau lần đăng nhập đầu tiên.
 - Khách có thể xem danh sách quảng cáo; cần đăng nhập để đổi quà hoặc dùng ví.
+- Người dùng có thể sửa họ tên, số điện thoại, giới tính và tỉnh/thành trong tab **Hồ sơ**. Email và số dư không thể sửa từ giao diện hồ sơ.
+- Sổ cái ví tải 25 giao dịch mỗi trang, hỗ trợ lọc theo loại và tải thêm; số liệu tổng vẫn tính trên toàn bộ giao dịch của tài khoản.
+- Nhà quảng cáo có thể tạm dừng, tiếp tục hoặc kết thúc chiến dịch của chính mình. Admin chỉ duyệt/từ chối chiến dịch đang chờ; các trạng thái kết thúc không thể kích hoạt lại.
 
 ## Giới hạn tính năng hiện tại
 
@@ -91,3 +94,13 @@ Mặc định ứng dụng kết nối tới `localhost\SQLEXPRESS`, cơ sở d�
 ## Cơ sở dữ liệu
 
 [`youtube_xu_database.sql`](youtube_xu_database.sql) là script T-SQL tạo schema 3NF, khóa, chỉ mục và dữ liệu mẫu.
+
+## Kiểm thử hồi quy tập trung
+
+Yêu cầu Node.js 22.5 trở lên. Chạy các kiểm thử quyền sở hữu/trạng thái chiến dịch, phân trang ví, transaction tạo chiến dịch và cập nhật hồ sơ:
+
+```powershell
+node --import ./tests/setup/register.mjs --test ./tests/09-ads-status.test.mjs
+```
+
+Các kiểm thử gọi route handler thật nhưng dùng SQLite trong bộ nhớ để không ghi dữ liệu vào SQL Server. Đây là kiểm tra logic, không thay thế kiểm thử tích hợp trên SQL Server thật.
