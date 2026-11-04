@@ -237,6 +237,18 @@ input, select, textarea {
   margin-bottom: 22px;
 }
 
+.watch-toolbar-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.ad-search {
+  width: min(100%, 380px);
+}
+
 .category-filters {
   display: flex;
   flex-wrap: wrap;

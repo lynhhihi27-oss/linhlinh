@@ -42,6 +42,7 @@ export default function YouTubeXuApp() {
   const [categories, setCategories] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [ads, setAds] = useState([]);
+  const [adSearchTerm, setAdSearchTerm] = useState('');
   const [isLoadingAds, setIsLoadingAds] = useState(true);
   const [adsError, setAdsError] = useState('');
   const [rewards, setRewards] = useState([]);
@@ -645,12 +646,17 @@ export default function YouTubeXuApp() {
     }
   };
 
+  const normalizedAdSearch = adSearchTerm.trim().toLocaleLowerCase('vi');
+  const visibleAds = normalizedAdSearch
+    ? ads.filter(ad => [ad.title, ad.advertiser_name, ad.category_name]
+      .some(value => String(value || '').toLocaleLowerCase('vi').includes(normalizedAdSearch)))
+    : ads;
   const displayedAdGroups = selectedCategory
-    ? [{ category_id: selectedCategory, category_name: ads[0]?.category_name, ads }]
+    ? [{ category_id: selectedCategory, category_name: visibleAds[0]?.category_name, ads: visibleAds }]
     : categories
       .map(category => ({
         ...category,
-        ads: ads.filter(ad => String(ad.category_id) === String(category.category_id))
+        ads: visibleAds.filter(ad => String(ad.category_id) === String(category.category_id))
       }))
       .filter(category => category.ads.length > 0);
   const roleLabel = {
@@ -917,30 +923,41 @@ export default function YouTubeXuApp() {
           <div>
             {/* Filter by Category */}
             <div className="category-toolbar">
-              <div className="category-filters">
-                <button
-                  className={`btn btn-sm category-filter${selectedCategory === '' ? ' is-selected' : ''}`}
-                  style={{
-                    background: selectedCategory === '' ? 'var(--primary)' : 'var(--bg-surface-elevated)',
-                    color: selectedCategory === '' ? '#fff' : 'var(--text-muted)'
-                  }}
-                  onClick={() => setSelectedCategory('')}
-                >
-                  Tất cả
-                </button>
-                {categories.map(cat => (
+              <div className="watch-toolbar-main">
+                <label htmlFor="ad-search" className="sr-only">Tìm chiến dịch theo tên, nhà quảng cáo hoặc danh mục</label>
+                <input
+                  id="ad-search"
+                  className="form-input ad-search"
+                  type="search"
+                  placeholder="Tìm chiến dịch..."
+                  value={adSearchTerm}
+                  onChange={event => setAdSearchTerm(event.target.value)}
+                />
+                <div className="category-filters">
                   <button
-                    key={cat.category_id}
-                    className={`btn btn-sm category-filter${selectedCategory === cat.category_id.toString() ? ' is-selected' : ''}`}
+                    className={`btn btn-sm category-filter${selectedCategory === '' ? ' is-selected' : ''}`}
                     style={{
-                      background: selectedCategory === cat.category_id.toString() ? 'var(--primary)' : 'var(--bg-surface-elevated)',
-                      color: selectedCategory === cat.category_id.toString() ? '#fff' : 'var(--text-muted)'
+                      background: selectedCategory === '' ? 'var(--primary)' : 'var(--bg-surface-elevated)',
+                      color: selectedCategory === '' ? '#fff' : 'var(--text-muted)'
                     }}
-                    onClick={() => setSelectedCategory(cat.category_id.toString())}
+                    onClick={() => setSelectedCategory('')}
                   >
-                    {cat.category_name}
+                    Tất cả
                   </button>
-                ))}
+                  {categories.map(cat => (
+                    <button
+                      key={cat.category_id}
+                      className={`btn btn-sm category-filter${selectedCategory === cat.category_id.toString() ? ' is-selected' : ''}`}
+                      style={{
+                        background: selectedCategory === cat.category_id.toString() ? 'var(--primary)' : 'var(--bg-surface-elevated)',
+                        color: selectedCategory === cat.category_id.toString() ? '#fff' : 'var(--text-muted)'
+                      }}
+                      onClick={() => setSelectedCategory(cat.category_id.toString())}
+                    >
+                      {cat.category_name}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <button className="btn btn-secondary btn-sm refresh-button" onClick={loadAds}>
@@ -965,12 +982,14 @@ export default function YouTubeXuApp() {
                   <RefreshCw size={14} /> Thử tải lại
                 </button>
               </div>
-            ) : ads.length === 0 ? (
+            ) : visibleAds.length === 0 ? (
               <div className="glass-panel" style={{ padding: '60px 20px', textAlign: 'center' }}>
                 <Coins size={48} color="var(--text-dim)" style={{ margin: '0 auto 16px' }} />
-                <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>Không có quảng cáo nào phù hợp lúc này</h3>
+                <h3 style={{ fontSize: '1.2rem', fontWeight: 700 }}>
+                  {ads.length > 0 ? 'Không tìm thấy chiến dịch phù hợp' : 'Không có quảng cáo nào phù hợp lúc này'}
+                </h3>
                 <p style={{ color: 'var(--text-muted)', fontSize: '0.9rem', marginTop: '6px' }}>
-                  Hãy chọn danh mục khác hoặc quay lại sau khi có chiến dịch mới.
+                  {ads.length > 0 ? 'Thử từ khóa khác hoặc xóa nội dung tìm kiếm.' : 'Hãy chọn danh mục khác hoặc quay lại sau khi có chiến dịch mới.'}
                 </p>
               </div>
             ) : (

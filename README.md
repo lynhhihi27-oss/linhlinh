@@ -76,6 +76,7 @@ Mặc định ứng dụng kết nối tới `localhost\SQLEXPRESS`, cơ sở d�
 - Người dùng có thể sửa họ tên, số điện thoại, giới tính và tỉnh/thành trong tab **Hồ sơ**. Email và số dư không thể sửa từ giao diện hồ sơ.
 - Sổ cái ví tải 25 giao dịch mỗi trang, hỗ trợ lọc theo loại và tải thêm; số liệu tổng vẫn tính trên toàn bộ giao dịch của tài khoản.
 - Nhà quảng cáo có thể tạm dừng, tiếp tục hoặc kết thúc chiến dịch của chính mình. Admin chỉ duyệt/từ chối chiến dịch đang chờ; các trạng thái kết thúc không thể kích hoạt lại.
+- Danh sách chiến dịch hỗ trợ tìm theo tiêu đề, nhà quảng cáo hoặc danh mục; bộ lọc danh mục hiện có vẫn được giữ nguyên.
 
 ## Giới hạn tính năng hiện tại
 
