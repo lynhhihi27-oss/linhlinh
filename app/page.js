@@ -62,6 +62,17 @@ export default function YouTubeXuApp() {
     referrals: { code: '', invited_users: 0, bonus_xu: 0 },
     transactions: []
   });
+  const [walletCursor, setWalletCursor] = useState(null);
+  const [walletHasMore, setWalletHasMore] = useState(false);
+  const [isLoadingMoreTransactions, setIsLoadingMoreTransactions] = useState(false);
+  const [transactionTypeFilter, setTransactionTypeFilter] = useState('');
+  const [profileForm, setProfileForm] = useState({
+    full_name: '',
+    phone: '',
+    gender: 'OTHER',
+    province: ''
+  });
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [adminStats, setAdminStats] = useState(null);
   const [adminAds, setAdminAds] = useState([]);
   const [fraudData, setFraudData] = useState({ suspicious_users: [], recent_invalid_views: [] });
@@ -117,6 +128,12 @@ export default function YouTubeXuApp() {
       const data = await res.json();
       if (data.success) {
         setCurrentUser(data.user);
+        setProfileForm({
+          full_name: data.user.full_name || '',
+          phone: data.user.phone || '',
+          gender: data.user.gender || 'OTHER',
+          province: data.user.province || ''
+        });
         if (data.user?.system_role === 'ADMIN') setActiveTab('admin');
         else if (data.user?.system_role === 'ADVERTISER') setActiveTab('advertiser');
         else setActiveTab(tab => tab === 'admin' || tab === 'advertiser' ? 'watch' : tab);
@@ -203,20 +220,35 @@ export default function YouTubeXuApp() {
   }, []);
 
   // Load Wallet
-  const loadWallet = useCallback(async () => {
+  const loadWallet = useCallback(async (cursor = null, append = false) => {
     try {
-      const res = await fetch('/api/wallet');
+      if (append) setIsLoadingMoreTransactions(true);
+      const params = new URLSearchParams({ limit: '25' });
+      if (cursor) params.set('before', cursor);
+      if (transactionTypeFilter) params.set('type', transactionTypeFilter);
+      const res = await fetch(`/api/wallet?${params.toString()}`);
       const data = await res.json();
-      if (data.success) {
-        setWalletData(data);
-        setCurrentUser(prev => prev?.xu_balance === data.balance
-          ? prev
-          : { ...prev, xu_balance: data.balance });
+      if (!res.ok || !data.success) {
+        showToast(data.message || 'Không thể tải sổ cái ví Xu.', 'error');
+        return;
       }
+
+      setWalletData(previous => ({
+        ...data,
+        transactions: append ? [...previous.transactions, ...data.transactions] : data.transactions
+      }));
+      setWalletCursor(data.next_cursor);
+      setWalletHasMore(data.has_more);
+      setCurrentUser(prev => prev?.xu_balance === data.balance
+        ? prev
+        : { ...prev, xu_balance: data.balance });
     } catch (err) {
       console.error(err);
+      showToast('Không thể kết nối để tải ví Xu.', 'error');
+    } finally {
+      if (append) setIsLoadingMoreTransactions(false);
     }
-  }, []);
+  }, [transactionTypeFilter]);
 
   const handleCopyReferralCode = async () => {
     try {
@@ -225,6 +257,37 @@ export default function YouTubeXuApp() {
     } catch (err) {
       console.error(err);
       showToast('Không thể sao chép mã giới thiệu trên trình duyệt này.', 'error');
+    }
+  };
+
+  const handleUpdateProfile = async (event) => {
+    event.preventDefault();
+    setIsSavingProfile(true);
+    try {
+      const res = await fetch('/api/profile', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(profileForm)
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        showToast(data.message || 'Không thể cập nhật hồ sơ.', 'error');
+        return;
+      }
+
+      setCurrentUser(data.user);
+      setProfileForm({
+        full_name: data.user.full_name || '',
+        phone: data.user.phone || '',
+        gender: data.user.gender || 'OTHER',
+        province: data.user.province || ''
+      });
+      showToast(data.message, 'success');
+    } catch (error) {
+      console.error(error);
+      showToast('Không thể kết nối để cập nhật hồ sơ.', 'error');
+    } finally {
+      setIsSavingProfile(false);
     }
   };
 
@@ -509,6 +572,12 @@ export default function YouTubeXuApp() {
       const data = await res.json();
       if (data.success) {
         setCurrentUser(data.user);
+        setProfileForm({
+          full_name: data.user.full_name || '',
+          phone: data.user.phone || '',
+          gender: data.user.gender || 'OTHER',
+          province: data.user.province || ''
+        });
         setShowLoginModal(false);
         setLoginForm({ emailOrPhone: '', password: '' });
         // Tự động chuyển tab phù hợp với vai trò
@@ -560,6 +629,12 @@ export default function YouTubeXuApp() {
         setShowRegisterModal(false);
         setRegisterForm((prev) => ({ ...prev, password: '' }));
         setCurrentUser(data.user);
+        setProfileForm({
+          full_name: data.user.full_name || '',
+          phone: data.user.phone || '',
+          gender: data.user.gender || 'OTHER',
+          province: data.user.province || ''
+        });
         setActiveTab('watch');
       } else {
         showToast(data.message, 'error');
@@ -691,6 +766,22 @@ export default function YouTubeXuApp() {
               <span>Ví Xu</span>
             </button>
 
+            {currentUser && (
+              <button
+                className="btn btn-sm"
+                style={{
+                  background: activeTab === 'profile' ? 'var(--bg-surface-hover)' : 'transparent',
+                  color: activeTab === 'profile' ? '#fff' : 'var(--text-muted)',
+                  fontWeight: activeTab === 'profile' ? 700 : 500,
+                  border: activeTab === 'profile' ? '1px solid var(--border-subtle)' : '1px solid transparent'
+                }}
+                onClick={() => setActiveTab('profile')}
+              >
+                <UserCheck size={16} color="#60a5fa" />
+                <span>Hồ sơ</span>
+              </button>
+            )}
+
             {/* Tab dành cho Advertiser */}
             {(currentUser?.system_role === 'ADVERTISER' || currentUser?.system_role === 'ADMIN') && (
               <button 
@@ -797,6 +888,7 @@ export default function YouTubeXuApp() {
               {activeTab === 'watch' && 'Khám phá các chiến dịch video theo danh mục. Tính năng nhận Xu sẽ mở khi hệ thống xác minh lượt xem được tích hợp.'}
               {activeTab === 'rewards' && 'Chọn phần quà bạn muốn đổi. Yêu cầu sẽ được xử lý sau khi quản trị viên xác nhận mã quà từ nhà cung cấp.'}
               {activeTab === 'wallet' && 'Theo dõi số dư và lịch sử cộng, sử dụng hoặc điều chỉnh Xu trong ví của bạn.'}
+              {activeTab === 'profile' && 'Cập nhật thông tin cá nhân của bạn.'}
               {activeTab === 'advertiser' && 'Tạo chiến dịch video, thiết lập ngân sách và chọn nhóm khách hàng mục tiêu.'}
               {activeTab === 'admin' && 'Quản lý chiến dịch, yêu cầu đổi quà và hoạt động của tài khoản.'}
             </p>
@@ -1212,9 +1304,26 @@ export default function YouTubeXuApp() {
                     Lịch sử ghi lại mọi lần nhận, sử dụng và điều chỉnh Xu trong ví.
                   </p>
                 </div>
-                <button className="btn btn-secondary btn-sm" onClick={loadWallet}>
-                  <RefreshCw size={14} /> Tải lại sổ cái
-                </button>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '10px', flexWrap: 'wrap' }}>
+                  <label htmlFor="wallet-transaction-type" className="sr-only">Lọc theo loại giao dịch</label>
+                  <select
+                    id="wallet-transaction-type"
+                    className="form-select"
+                    value={transactionTypeFilter}
+                    onChange={(event) => setTransactionTypeFilter(event.target.value)}
+                    style={{ minWidth: '160px', padding: '8px 10px' }}
+                  >
+                    <option value="">Tất cả giao dịch</option>
+                    <option value="EARN">Nhận Xu</option>
+                    <option value="REDEEM">Đổi quà</option>
+                    <option value="REFUND">Hoàn Xu</option>
+                    <option value="BONUS">Thưởng</option>
+                    <option value="ADJUST">Điều chỉnh</option>
+                  </select>
+                  <button className="btn btn-secondary btn-sm" onClick={() => loadWallet()}>
+                    <RefreshCw size={14} /> Tải lại sổ cái
+                  </button>
+                </div>
               </div>
 
               {walletData.transactions.length === 0 ? (
@@ -1267,8 +1376,91 @@ export default function YouTubeXuApp() {
                   </table>
                 </div>
               )}
+              {walletHasMore && (
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '18px' }}>
+                  <button
+                    type="button"
+                    className="btn btn-secondary"
+                    onClick={() => loadWallet(walletCursor, true)}
+                    disabled={isLoadingMoreTransactions}
+                  >
+                    {isLoadingMoreTransactions ? 'Đang tải...' : 'Tải thêm giao dịch'}
+                  </button>
+                </div>
+              )}
             </div>
           </div>
+        )}
+
+        {activeTab === 'profile' && currentUser && (
+          <section className="glass-panel" aria-labelledby="profile-heading" style={{ maxWidth: '760px', margin: '0 auto', padding: '28px' }}>
+            <h2 id="profile-heading" style={{ fontSize: '1.35rem', fontWeight: 800, marginBottom: '6px' }}>Hồ sơ cá nhân</h2>
+            <p style={{ color: 'var(--text-muted)', marginBottom: '24px' }}>
+              Cập nhật thông tin liên hệ và thông tin hiển thị. Email và số dư Xu chỉ đọc.
+            </p>
+            <form onSubmit={handleUpdateProfile}>
+              <div className="form-group">
+                <label className="form-label" htmlFor="profile-full-name">Họ và tên</label>
+                <input
+                  id="profile-full-name"
+                  className="form-input"
+                  value={profileForm.full_name}
+                  onChange={event => setProfileForm({ ...profileForm, full_name: event.target.value })}
+                  maxLength={100}
+                  required
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="profile-email">Email</label>
+                <input id="profile-email" className="form-input" value={currentUser.email} readOnly disabled />
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '14px' }}>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="profile-phone">Số điện thoại</label>
+                  <input
+                    id="profile-phone"
+                    className="form-input"
+                    type="tel"
+                    value={profileForm.phone}
+                    onChange={event => setProfileForm({ ...profileForm, phone: event.target.value })}
+                    maxLength={16}
+                    required
+                  />
+                </div>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="profile-gender">Giới tính</label>
+                  <select
+                    id="profile-gender"
+                    className="form-select"
+                    value={profileForm.gender}
+                    onChange={event => setProfileForm({ ...profileForm, gender: event.target.value })}
+                  >
+                    <option value="MALE">Nam</option>
+                    <option value="FEMALE">Nữ</option>
+                    <option value="OTHER">Khác</option>
+                  </select>
+                </div>
+              </div>
+              <div className="form-group">
+                <label className="form-label" htmlFor="profile-province">Tỉnh / Thành phố</label>
+                <input
+                  id="profile-province"
+                  className="form-input"
+                  value={profileForm.province}
+                  onChange={event => setProfileForm({ ...profileForm, province: event.target.value })}
+                  maxLength={50}
+                />
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '14px', flexWrap: 'wrap' }}>
+                <span style={{ color: 'var(--text-muted)', fontSize: '0.85rem' }}>
+                  Vai trò: {roleLabel} · Số dư: {currentUser.xu_balance?.toLocaleString()} Xu
+                </span>
+                <button type="submit" className="btn btn-primary" disabled={isSavingProfile}>
+                  {isSavingProfile ? 'Đang lưu...' : 'Lưu hồ sơ'}
+                </button>
+              </div>
+            </form>
+          </section>
         )}
 
         {/* ========================================================

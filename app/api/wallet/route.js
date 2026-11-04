@@ -9,6 +9,25 @@ export async function GET(request) {
     const auth = await requireSession(request);
     if (auth.response) return auth.response;
     const userId = auth.user.user_id;
+    const { searchParams } = new URL(request.url);
+    const requestedLimit = searchParams.get('limit');
+    const limit = requestedLimit === null ? 25 : Number(requestedLimit);
+    const before = searchParams.get('before');
+    const transactionType = searchParams.get('type');
+
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+      return NextResponse.json({ success: false, message: 'Số giao dịch mỗi trang phải từ 1 đến 100.' }, { status: 400 });
+    }
+    if (before !== null && (
+      !/^\d{1,19}$/.test(before) ||
+      BigInt(before) <= 0n ||
+      BigInt(before) > 9223372036854775807n
+    )) {
+      return NextResponse.json({ success: false, message: 'Mốc phân trang không hợp lệ.' }, { status: 400 });
+    }
+    if (transactionType && !['EARN', 'REDEEM', 'REFUND', 'BONUS', 'ADJUST'].includes(transactionType)) {
+      return NextResponse.json({ success: false, message: 'Loại giao dịch không hợp lệ.' }, { status: 400 });
+    }
 
     // 1. Số dư và thông tin ví
     const users = await query('SELECT user_id, full_name, referral_code, xu_balance, account_status FROM users WHERE user_id = ?', [userId]);
@@ -37,17 +56,28 @@ export async function GET(request) {
     );
 
     // 3. Sổ cái giao dịch
-    const transactions = await query(
-      `SELECT t.*, v.ad_id, a.title AS ad_title, r.reward_name
+    let transactionSql = `
+      SELECT TOP (${limit + 1}) t.*, v.ad_id, a.title AS ad_title, r.reward_name
        FROM xu_transactions t
        LEFT JOIN ad_views v ON t.view_id = v.view_id
        LEFT JOIN ads a ON v.ad_id = a.ad_id
        LEFT JOIN redemptions red ON t.redemption_id = red.redemption_id
        LEFT JOIN rewards r ON red.reward_id = r.reward_id
-       WHERE t.user_id = ?
-       ORDER BY t.txn_id DESC`,
-      [userId]
-    );
+       WHERE t.user_id = ?`;
+    const transactionParams = [userId];
+    if (before !== null) {
+      transactionSql += ' AND t.txn_id < ?';
+      transactionParams.push(before);
+    }
+    if (transactionType) {
+      transactionSql += ' AND t.txn_type = ?';
+      transactionParams.push(transactionType);
+    }
+    transactionSql += ' ORDER BY t.txn_id DESC';
+
+    const selectedTransactions = await query(transactionSql, transactionParams);
+    const hasMore = selectedTransactions.length > limit;
+    const transactions = selectedTransactions.slice(0, limit);
 
     return NextResponse.json({
       success: true,
@@ -59,7 +89,11 @@ export async function GET(request) {
         invited_users: referralStats[0]?.invited_users || 0,
         bonus_xu: referralStats[0]?.referral_bonus_xu || 0
       },
-      transactions
+      transactions,
+      has_more: hasMore,
+      next_cursor: hasMore && transactions.length > 0
+        ? String(transactions[transactions.length - 1].txn_id)
+        : null
     });
   } catch (error) {
     console.error('API wallet error:', error);
