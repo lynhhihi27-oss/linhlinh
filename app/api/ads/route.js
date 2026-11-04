@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { query } from '@/lib/db';
+import pool, { query } from '@/lib/db';
 import { getSessionUser, requireSession } from '@/lib/auth';
 
 export const dynamic = 'force-dynamic';
@@ -93,6 +93,7 @@ export async function GET(request) {
 }
 
 export async function POST(request) {
+  let connection;
   try {
     const auth = await requireSession(request, ['ADVERTISER', 'ADMIN']);
     if (auth.response) return auth.response;
@@ -199,7 +200,10 @@ export async function POST(request) {
     }
 
     // Tạo bản ghi ads với trạng thái PENDING (chờ Admin duyệt)
-    const result = await query(
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+
+    const [result] = await connection.execute(
       `INSERT INTO ads (advertiser_id, category_id, title, video_url, duration_sec, reward_xu, budget_xu, spent_xu, start_date, end_date, status, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 'PENDING', NOW())`,
       [auth.user.user_id, categoryId, title.trim(), video_url.trim(), dur, finalReward, budget, start_date, end_date]
@@ -209,12 +213,14 @@ export async function POST(request) {
 
     // Lưu cấu hình đối tượng mục tiêu (ad_targeting)
     if (target_gender || ageFrom !== null || ageTo !== null || target_province) {
-      await query(
+      await connection.execute(
         `INSERT INTO ad_targeting (ad_id, gender, age_from, age_to, province)
          VALUES (?, ?, ?, ?, ?)`,
         [newAdId, target_gender || null, ageFrom, ageTo, target_province || null]
       );
     }
+
+    await connection.commit();
 
     return NextResponse.json({
       success: true,
@@ -222,7 +228,10 @@ export async function POST(request) {
       ad_id: newAdId
     });
   } catch (error) {
+    if (connection) await connection.rollback();
     console.error('API Ads POST error:', error);
     return NextResponse.json({ success: false, message: 'Không thể tạo chiến dịch lúc này.' }, { status: 500 });
+  } finally {
+    connection?.release();
   }
 }
