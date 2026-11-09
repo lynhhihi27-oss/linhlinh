@@ -28,6 +28,7 @@ Mặc định ứng dụng kết nối tới `localhost\SQLEXPRESS`, cơ sở d�
    sqlcmd -S ".\SQLEXPRESS" -E -b -f i:65001 -i ".\migrations\20261020_add_referral_codes.sql"
    sqlcmd -S ".\SQLEXPRESS" -E -b -f i:65001 -i ".\migrations\20261022_add_redemption_idempotency.sql"
    sqlcmd -S ".\SQLEXPRESS" -E -b -f i:65001 -i ".\migrations\20261022_add_demo_video_campaigns.sql"
+   sqlcmd -S ".\SQLEXPRESS" -E -b -f i:65001 -i ".\migrations\20261110_add_sprint5_features.sql"
    ```
 
    Các migration không xóa dữ liệu hiện có. Migration video có thể chạy lại an toàn; migration đổi quà thêm cột khóa yêu cầu tùy chọn và unique index có lọc, các đơn cũ giữ nguyên `NULL`.
@@ -92,6 +93,18 @@ Mặc định ứng dụng kết nối tới `localhost\SQLEXPRESS`, cơ sở d�
 - Mỗi tài khoản có mã giới thiệu riêng. Phần thưởng giới thiệu chỉ có thể được phát sau khi tích hợp và xác minh lượt xem hợp lệ; tính năng nhận Xu hiện bị khóa nên không phát sinh thưởng mới.
 - Các tài khoản mẫu dùng mã giới thiệu `YX00000001` đến `YX00000010`. Có thể xem và sao chép mã cá nhân tại tab **Ví xu**.
 
+## Chức năng Sprint 5
+
+Sau khi áp dụng `migrations/20261110_add_sprint5_features.sql`, người dùng đã đăng nhập có thể mở **Tiện ích** trên thanh điều hướng:
+
+- Thông báo hiển thị thông báo mới và số chưa đọc; có thể đánh dấu từng mục hoặc tất cả đã đọc.
+- Bảng xếp hạng hiển thị Top 10 người xem theo tuần, tháng hoặc toàn thời gian. Chỉ tính giao dịch EARN/BONUS dương hợp lệ; không tính hoàn Xu/thu hồi, và Xu từ lượt xem chỉ hợp lệ khi lượt xem ở trạng thái COMPLETED.
+- Nhiệm vụ hằng ngày chỉ nhận thưởng một lần mỗi nhiệm vụ/người/ngày. Nhiệm vụ đăng nhập và điểm danh dành cho người xem đã đăng nhập; nhiệm vụ quảng cáo cần lượt xem COMPLETED đã được máy chủ ghi nhận. API xác minh lượt xem hiện vẫn bị khóa, nên chưa thể hoàn thành nhiệm vụ quảng cáo.
+- Người xem và nhà quảng cáo chỉ xem yêu cầu hỗ trợ của chính mình. Admin có thể tìm/lọc, phản hồi và đổi trạng thái.
+- Nhà quảng cáo chỉ xem báo cáo chiến dịch của mình; Admin xem báo cáo hệ thống. Bộ lọc tuần/tháng tính từ đầu kỳ đến hiện tại, toàn thời gian hiển thị tổng và chuỗi biểu đồ 30 ngày gần nhất. CSV xuất chuỗi thời gian đang hiển thị.
+
+Trang chức năng nằm tại `/features`. Migration chỉ thêm bảng và dữ liệu nhiệm vụ, không xóa hoặc tạo lại cơ sở dữ liệu.
+
 ## Cơ sở dữ liệu
 
 [`youtube_xu_database.sql`](youtube_xu_database.sql) là script T-SQL tạo schema 3NF, khóa, chỉ mục và dữ liệu mẫu.
@@ -105,3 +118,55 @@ node --import ./tests/setup/register.mjs --test ./tests/09-ads-status.test.mjs
 ```
 
 Các kiểm thử gọi route handler thật nhưng dùng SQLite trong bộ nhớ để không ghi dữ liệu vào SQL Server. Đây là kiểm tra logic, không thay thế kiểm thử tích hợp trên SQL Server thật.
+
+Kiểm thử API cho Sprint 5:
+
+```powershell
+node --test --import ./tests/setup/register.mjs tests/10-sprint5-features.test.mjs
+```
+
+## Quy ước đóng góp
+
+### Commit
+
+Đặt tiêu đề commit theo Conventional Commits: `<type>(<scope>): <mô tả ngắn>`. Dùng động từ, nêu rõ thay đổi và tránh gộp nhiều mục đích không liên quan vào một commit.
+
+| Loại | Dùng khi | Ví dụ |
+| --- | --- | --- |
+| `feat` | Thêm chức năng | `feat(wallet): add transaction filters` |
+| `fix` | Sửa lỗi | `fix(redeem): prevent duplicate requests` |
+| `test` | Thêm hoặc cập nhật kiểm thử | `test(ads): cover campaign ownership` |
+| `docs` | Chỉ thay đổi tài liệu | `docs(readme): document local setup` |
+| `refactor` | Tái cấu trúc, không đổi hành vi | `refactor(auth): share session lookup` |
+| `chore` | Công việc cấu hình/bảo trì | `chore(deps): update lint tooling` |
+
+### Branch và Pull Request
+
+- Không commit trực tiếp lên `main`. Tạo branch mới từ `main` đã cập nhật.
+- Đặt tên branch theo `<type>/<mô-tả-ngắn>` bằng chữ thường và dấu gạch ngang, ví dụ `feat/wallet-history`, `fix/redeem-idempotency`, `docs/contributing`.
+- Giữ mỗi branch/PR tập trung vào một mục tiêu; chia nhỏ thay đổi độc lập và liên kết issue liên quan.
+- Mở PR vào `main`, mô tả vấn đề, cách giải quyết, cách kiểm thử và các tác động cần lưu ý. Đính kèm ảnh hoặc video khi thay đổi giao diện.
+- Chờ review và các kiểm tra bắt buộc đạt trước khi merge. Giải quyết góp ý; không force-push nhánh dùng chung nếu chưa thống nhất với cộng tác viên.
+- Không đưa secret, dữ liệu người dùng hoặc cấu hình môi trường vào commit. Migration phải bảo toàn dữ liệu; không chạy script khởi tạo có xóa database trên môi trường có dữ liệu cần giữ.
+
+### Checklist review code
+
+- [ ] Thay đổi đúng phạm vi PR, không làm mất hành vi hiện có ngoài chủ đích.
+- [ ] Kiểm tra xác thực, phân quyền và quyền sở hữu dữ liệu ở backend; không tin dữ liệu nhạy cảm do client gửi.
+- [ ] Truy vấn dùng đúng SQL Server/T-SQL; thao tác nhiều bước cần transaction và xử lý lỗi rõ ràng.
+- [ ] Các thao tác cộng/trừ Xu, đổi quà và cập nhật tồn kho có tính idempotent, an toàn khi gửi đồng thời.
+- [ ] Có kiểm thử cho luồng thành công, dữ liệu sai/thiếu, quyền bị từ chối và lỗi liên quan.
+- [ ] Giao diện có trạng thái tải, lỗi/thành công và hiển thị phù hợp trên màn hình nhỏ khi cần.
+- [ ] Không có secret, log nhạy cảm, thay đổi database phá hủy dữ liệu hoặc chức năng quảng cáo thưởng Xu chưa được xác minh thật.
+- [ ] Tài liệu và migration được cập nhật nếu hành vi hoặc cách triển khai thay đổi.
+
+### Checklist kiểm thử sau khi merge
+
+- [ ] Cập nhật local `main` từ remote và cài dependencies theo lockfile (`npm.cmd ci`).
+- [ ] Chạy lint: `npm.cmd run lint`.
+- [ ] Chạy build production: `npm.cmd run build`.
+- [ ] Chạy kiểm thử hồi quy tập trung: `node --import ./tests/setup/register.mjs --test ./tests/09-ads-status.test.mjs`.
+- [ ] Nếu PR thêm hoặc sửa test, chạy các test liên quan và ghi kết quả vào PR; không coi test chưa chạy là đạt.
+- [ ] Với thay đổi database, áp dụng migration trên database kiểm thử có backup và xác minh schema/dữ liệu; không chạy script khởi tạo xóa database trên dữ liệu cần giữ.
+- [ ] Khởi động ứng dụng và kiểm tra nhanh luồng bị ảnh hưởng, quyền theo vai trò, lỗi API và giao diện responsive.
+- [ ] Theo dõi CI/log sau merge; nếu phát hiện hồi quy, báo nhóm và tạo PR sửa lỗi hoặc rollback theo quy trình đã thống nhất.

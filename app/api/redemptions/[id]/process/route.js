@@ -54,6 +54,12 @@ export async function PATCH(request, { params }) {
         [giftCode, auth.user.user_id, redemptionId]
       );
 
+      await connection.execute(
+        `INSERT INTO Notifications (UserID, Title, Message, Type, IsRead, CreatedAt)
+         VALUES (?, ?, ?, 'REDEMPTION_APPROVED', 0, NOW())`,
+        [order.user_id, 'Đổi quà thành công', `Đơn đổi "${order.reward_name}" đã được duyệt và cấp mã quà.`]
+      );
+
       await connection.commit();
       return NextResponse.json({
         success: true,
@@ -91,6 +97,12 @@ export async function PATCH(request, { params }) {
       await connection.execute(
         'UPDATE rewards SET stock_qty = stock_qty + 1 WHERE reward_id = ?',
         [order.reward_id]
+      );
+
+      await connection.execute(
+        `INSERT INTO Notifications (UserID, Title, Message, Type, IsRead, CreatedAt)
+         VALUES (?, ?, ?, 'REDEMPTION_REJECTED', 0, NOW())`,
+        [order.user_id, 'Yêu cầu đổi quà bị từ chối', `Đơn đổi "${order.reward_name}" bị từ chối; ${order.xu_spent} Xu đã được hoàn lại.`]
       );
 
       await connection.commit();

@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Play, CheckCircle2, Clock, Coins, Gift, Wallet, ShieldAlert, 
-  BarChart3, PlusCircle, AlertTriangle, UserCheck, Lock, Unlock, 
+  BarChart3, PlusCircle, AlertTriangle, UserCheck, Lock, Unlock, Bell,
   Copy, ExternalLink, RefreshCw, Filter, Sparkles, Award, ArrowUpRight, ArrowDownLeft
 } from 'lucide-react';
 
@@ -34,9 +34,11 @@ const transactionTypeLabels = {
 export default function YouTubeXuApp() {
   // Current active user & role
   const [currentUser, setCurrentUser] = useState(null);
+  const currentUserId = currentUser?.user_id;
   const [activeTab, setActiveTab] = useState('watch'); // 'watch' | 'rewards' | 'wallet' | 'advertiser' | 'admin'
   const [isLoading, setIsLoading] = useState(true);
   const [notification, setNotification] = useState(null);
+  const [unreadNotifications, setUnreadNotifications] = useState(0);
 
   // Data states
   const [categories, setCategories] = useState([]);
@@ -324,6 +326,29 @@ export default function YouTubeXuApp() {
       loadRedemptions();
     }
   }, [currentUser, activeTab, loadAds, loadAdminData, loadAdvertiserAds, loadRedemptions, loadWallet]);
+
+  useEffect(() => {
+    if (!currentUserId) {
+      setUnreadNotifications(0);
+      return undefined;
+    }
+    let active = true;
+    const loadUnreadCount = async () => {
+      try {
+        const response = await fetch('/api/notifications?limit=1');
+        const data = await response.json();
+        if (active && response.ok && data.success) setUnreadNotifications(data.unread_count || 0);
+      } catch (error) {
+        console.error('Unable to load unread notifications:', error);
+      }
+    };
+    loadUnreadCount();
+    const intervalId = window.setInterval(loadUnreadCount, 60000);
+    return () => {
+      active = false;
+      window.clearInterval(intervalId);
+    };
+  }, [currentUserId]);
 
   // Đổi quà (UC-02)
   const handleRedeem = (reward) => {
@@ -821,10 +846,25 @@ export default function YouTubeXuApp() {
                 <span>Quản Trị Admin</span>
               </button>
             )}
+            <a className="btn btn-sm feature-link" href="/features">
+              <Sparkles size={16} color="#fbbf24" />
+              <span>Tiện ích</span>
+            </a>
           </nav>
 
           {/* Account actions */}
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            {currentUser && (
+              <a
+                className="notification-bell"
+                href="/features?tab=notifications"
+                aria-label={`Thông báo, ${unreadNotifications} chưa đọc`}
+                title="Thông báo"
+              >
+                <Bell size={18} />
+                {unreadNotifications > 0 && <span>{unreadNotifications > 99 ? '99+' : unreadNotifications}</span>}
+              </a>
+            )}
 
             {/* Balance Pill + Đăng xuất (khi đã đăng nhập) */}
             {isLoading ? (

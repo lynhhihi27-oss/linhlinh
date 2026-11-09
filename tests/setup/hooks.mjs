@@ -4,6 +4,8 @@ const here = new URL('.', import.meta.url);
 const MAP = {
   '@/lib/db': new URL('./fake-db.mjs', here).href,        // mysql2  -> SQLite trong bộ nhớ
   '@/lib/auth': new URL('../../lib/auth.js', here).href,
+  '@/lib/leaderboard': new URL('../../lib/leaderboard.js', here).href,
+  '@/lib/reporting': new URL('../../lib/reporting.js', here).href,
   'next/server': new URL('./next-server-stub.mjs', here).href, // NextResponse tối giản
 };
 
