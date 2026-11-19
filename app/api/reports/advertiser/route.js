@@ -21,7 +21,9 @@ export async function GET(request) {
     const [campaigns, views, dailyViews] = await Promise.all([
       query(
         `SELECT COUNT(*) AS total_campaigns,
-                COALESCE(SUM(CASE WHEN status = 'ACTIVE' THEN 1 ELSE 0 END), 0) AS active_campaigns
+                COALESCE(SUM(CASE WHEN status = 'ACTIVE' THEN 1 ELSE 0 END), 0) AS active_campaigns,
+                COALESCE(SUM(spent_xu), 0) AS campaign_spend,
+                COALESCE(SUM(reserved_xu), 0) AS reserved_campaign_budget
          FROM ads WHERE advertiser_id = ?`,
         [auth.user.user_id]
       ),
@@ -46,6 +48,8 @@ export async function GET(request) {
       stats: {
         total_campaigns: campaigns[0]?.total_campaigns || 0,
         active_campaigns: campaigns[0]?.active_campaigns || 0,
+        campaign_spend: campaigns[0]?.campaign_spend || 0,
+        reserved_campaign_budget: campaigns[0]?.reserved_campaign_budget || 0,
         total_views: views[0]?.total_views || 0,
         valid_views: views[0]?.valid_views || 0,
         invalid_views: views[0]?.invalid_views || 0

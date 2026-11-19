@@ -54,7 +54,9 @@ export async function GET(request) {
         params
       ),
       query(
-        `SELECT COALESCE(SUM(spent_xu), 0) AS campaign_spend FROM ads`
+        `SELECT COALESCE(SUM(spent_xu), 0) AS campaign_spend,
+                COALESCE(SUM(reserved_xu), 0) AS reserved_campaign_budget
+         FROM ads`
       ),
       query(
         `SELECT t.created_at, t.txn_type, t.amount, t.view_id, v.view_status AS referenced_view_status,
@@ -102,6 +104,7 @@ export async function GET(request) {
         xu_issued: transactions[0]?.xu_issued || 0,
         xu_redeemed: transactions[0]?.xu_redeemed || 0,
         campaign_spend: ads[0]?.campaign_spend || 0,
+        reserved_campaign_budget: ads[0]?.reserved_campaign_budget || 0,
         total_transactions: transactions[0]?.total_transactions || 0,
         total_views: views[0]?.total_views || 0,
         valid_views: views[0]?.valid_views || 0,

@@ -26,7 +26,8 @@ export async function GET(request) {
          SUM(CASE WHEN status = 'PENDING' THEN 1 ELSE 0 END) AS pending_ads,
          SUM(CASE WHEN status = 'ENDED' THEN 1 ELSE 0 END) AS ended_ads,
          COALESCE(SUM(budget_xu), 0) AS total_budget_xu,
-         COALESCE(SUM(spent_xu), 0) AS total_spent_xu
+         COALESCE(SUM(spent_xu), 0) AS total_spent_xu,
+         COALESCE(SUM(reserved_xu), 0) AS total_reserved_xu
        FROM ads`
     );
 

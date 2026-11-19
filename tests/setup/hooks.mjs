@@ -6,6 +6,7 @@ const MAP = {
   '@/lib/auth': new URL('../../lib/auth.js', here).href,
   '@/lib/leaderboard': new URL('../../lib/leaderboard.js', here).href,
   '@/lib/reporting': new URL('../../lib/reporting.js', here).href,
+  '@/lib/dates': new URL('../../lib/dates.js', here).href,
   'next/server': new URL('./next-server-stub.mjs', here).href, // NextResponse tối giản
 };
 

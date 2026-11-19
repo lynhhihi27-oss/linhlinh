@@ -36,7 +36,7 @@ export async function PATCH(request, { params }) {
     await connection.beginTransaction();
 
     const [ads] = await connection.execute(
-      'SELECT ad_id, advertiser_id, status FROM ads WHERE ad_id = ? FOR UPDATE',
+      'SELECT ad_id, advertiser_id, status, reserved_xu FROM ads WHERE ad_id = ? FOR UPDATE',
       [adId]
     );
     if (ads.length === 0) {
@@ -73,6 +73,29 @@ export async function PATCH(request, { params }) {
       }, { status: 409 });
     }
 
+    let refundedBudget = 0;
+    if (['REJECTED', 'ENDED'].includes(status)) {
+      refundedBudget = Number(ad.reserved_xu || 0);
+      if (refundedBudget > 0) {
+        const [advertisers] = await connection.execute(
+          'SELECT xu_balance FROM users WHERE user_id = ? FOR UPDATE',
+          [ad.advertiser_id]
+        );
+        if (advertisers.length === 0) {
+          await connection.rollback();
+          return NextResponse.json({ success: false, message: 'Không tìm thấy tài khoản nhà quảng cáo.' }, { status: 404 });
+        }
+        const balanceAfterRefund = Number(advertisers[0].xu_balance) + refundedBudget;
+        await connection.execute('UPDATE users SET xu_balance = ? WHERE user_id = ?', [balanceAfterRefund, ad.advertiser_id]);
+        await connection.execute(
+          `INSERT INTO xu_transactions (user_id, view_id, redemption_id, txn_type, amount, balance_after, note, created_at)
+           VALUES (?, NULL, NULL, 'ADJUST', ?, ?, ?, NOW())`,
+          [ad.advertiser_id, refundedBudget, balanceAfterRefund, `Hoàn ngân sách chiến dịch #${adId} (${status})`]
+        );
+      }
+      await connection.execute('UPDATE ads SET reserved_xu = 0 WHERE ad_id = ?', [adId]);
+    }
+
     await connection.execute(
       `UPDATE ads
        SET status = ?,
@@ -85,7 +108,8 @@ export async function PATCH(request, { params }) {
 
     return NextResponse.json({
       success: true,
-      message: `Đã cập nhật trạng thái quảng cáo sang ${status} thành công!`
+      message: `Đã cập nhật trạng thái quảng cáo sang ${status} thành công!`,
+      refunded_budget_xu: refundedBudget
     });
   } catch (error) {
     if (connection) await connection.rollback();

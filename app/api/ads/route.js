@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server.js';
 import pool, { query } from '@/lib/db';
 import { getSessionUser, requireSession } from '@/lib/auth';
+import { vietnamDateKey } from '@/lib/dates';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,6 +14,7 @@ export async function GET(request) {
     }
     const categoryId = searchParams.get('category');
     const status = searchParams.get('status');
+    const requestedRole = searchParams.get('role');
 
     if (user?.system_role === 'ADMIN') {
       let sql = `
@@ -30,7 +32,14 @@ export async function GET(request) {
       const ads = await query(sql, params);
       return NextResponse.json({ success: true, verification_mode: 'SANDBOX', ads });
     }
+    if (user && ((requestedRole && requestedRole !== user.system_role && requestedRole !== 'VIEWER') || status)) {
+      return NextResponse.json({ success: false, message: 'Bạn không có quyền truy cập danh sách chiến dịch theo yêu cầu.' }, { status: 403 });
+    }
     if (user?.system_role === 'ADVERTISER') {
+      const requestedUserId = searchParams.get('userId');
+      if (requestedUserId !== null && Number(requestedUserId) !== Number(user.user_id)) {
+        return NextResponse.json({ success: false, message: 'Bạn không có quyền xem chiến dịch của nhà quảng cáo khác.' }, { status: 403 });
+      }
       const sql = `
         SELECT a.*, c.category_name
         FROM ads a
@@ -43,7 +52,7 @@ export async function GET(request) {
     }
 
     const userId = user?.user_id ?? null;
-    const today = new Date().toISOString().split('T')[0];
+    const today = vietnamDateKey();
     let sql = `
       SELECT a.*, c.category_name, u.full_name AS advertiser_name,
         (SELECT COUNT(*) FROM ad_views v 
@@ -214,21 +223,50 @@ export async function POST(request) {
       else if (dur <= 30) finalReward = 10;
       else finalReward = 20;
     }
+    const maxReward = dur <= 15 ? 5 : dur <= 30 ? 10 : 20;
+    if (finalReward > maxReward) {
+      return NextResponse.json({ success: false, message: `Mức thưởng tối đa cho quảng cáo ${dur} giây là ${maxReward} Xu.` }, { status: 400 });
+    }
     if (budget < finalReward) {
       return NextResponse.json({ success: false, message: 'Ngân sách phải đủ chi trả ít nhất một lượt thưởng.' }, { status: 400 });
     }
 
-    // Tạo bản ghi ads với trạng thái PENDING (chờ Admin duyệt)
+    const categories = await query('SELECT category_id FROM ad_categories WHERE category_id = ?', [categoryId]);
+    if (categories.length === 0) {
+      return NextResponse.json({ success: false, message: 'Danh mục quảng cáo không tồn tại.' }, { status: 400 });
+    }
+
     connection = await pool.getConnection();
     await connection.beginTransaction();
 
+    const [advertisers] = await connection.execute(
+      'SELECT user_id, xu_balance FROM users WHERE user_id = ? FOR UPDATE',
+      [auth.user.user_id]
+    );
+    if (advertisers.length === 0) {
+      await connection.rollback();
+      return NextResponse.json({ success: false, message: 'Không tìm thấy tài khoản nhà quảng cáo.' }, { status: 404 });
+    }
+    if (Number(advertisers[0].xu_balance) < budget) {
+      await connection.rollback();
+      return NextResponse.json({ success: false, message: 'Số dư Xu không đủ để giữ chỗ ngân sách chiến dịch.' }, { status: 409 });
+    }
+
+    const balanceAfterReservation = Number(advertisers[0].xu_balance) - budget;
+    await connection.execute('UPDATE users SET xu_balance = ? WHERE user_id = ?', [balanceAfterReservation, auth.user.user_id]);
+
     const [result] = await connection.execute(
-      `INSERT INTO ads (advertiser_id, category_id, title, video_url, duration_sec, reward_xu, budget_xu, spent_xu, start_date, end_date, status, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, 'PENDING', NOW())`,
-      [auth.user.user_id, categoryId, title.trim(), video_url.trim(), dur, finalReward, budget, start_date, end_date]
+      `INSERT INTO ads (advertiser_id, category_id, title, video_url, duration_sec, reward_xu, budget_xu, spent_xu, reserved_xu, start_date, end_date, status, created_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 'PENDING', NOW())`,
+      [auth.user.user_id, categoryId, title.trim(), video_url.trim(), dur, finalReward, budget, budget, start_date, end_date]
     );
 
     const newAdId = result.insertId;
+    await connection.execute(
+      `INSERT INTO xu_transactions (user_id, view_id, redemption_id, txn_type, amount, balance_after, note, created_at)
+       VALUES (?, NULL, NULL, 'ADJUST', ?, ?, ?, NOW())`,
+      [auth.user.user_id, -budget, balanceAfterReservation, `Giữ chỗ ngân sách chiến dịch #${newAdId}: ${title.trim().slice(0, 150)}`]
+    );
 
     // Lưu cấu hình đối tượng mục tiêu (ad_targeting)
     if (target_gender || ageFrom !== null || ageTo !== null || target_province) {
@@ -244,7 +282,9 @@ export async function POST(request) {
     return NextResponse.json({
       success: true,
       message: 'Khởi tạo chiến dịch thành công! Quảng cáo đã được gửi tới Quản trị viên để phê duyệt.',
-      ad_id: newAdId
+      ad_id: newAdId,
+      reserved_budget_xu: budget,
+      balance_after: balanceAfterReservation
     });
   } catch (error) {
     if (connection) await connection.rollback();

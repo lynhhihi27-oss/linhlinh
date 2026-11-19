@@ -1,18 +1,15 @@
 import { NextResponse } from 'next/server';
 import { query } from '@/lib/db';
 import { requireSession } from '@/lib/auth';
+import { vietnamDateKey } from '@/lib/dates';
 
 export const dynamic = 'force-dynamic';
-
-function today() {
-  return new Date().toISOString().slice(0, 10);
-}
 
 export async function GET(request) {
   try {
     const auth = await requireSession(request, ['VIEWER']);
     if (auth.response) return auth.response;
-    const date = today();
+    const date = vietnamDateKey();
     const [tasks, views, claims] = await Promise.all([
       query(
         `SELECT TaskID, TaskKey, Title, Description, RewardXu, TaskType, TargetCount

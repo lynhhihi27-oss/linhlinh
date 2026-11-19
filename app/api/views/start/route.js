@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { requireSession } from '@/lib/auth';
 import { query } from '@/lib/db';
+import { vietnamDateKey } from '@/lib/dates';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,12 +57,15 @@ export async function POST(request) {
     if (ad.status !== 'ACTIVE') {
       return NextResponse.json({ success: false, message: 'Quảng cáo hiện không khả dụng.' }, { status: 409 });
     }
-    const today = new Date().toISOString().split('T')[0];
+    const today = vietnamDateKey();
     if (today < dateOnly(ad.start_date) || today > dateOnly(ad.end_date)) {
       return NextResponse.json({ success: false, message: 'Quảng cáo hiện ngoài thời gian chạy.' }, { status: 409 });
     }
     if (ad.spent_xu >= ad.budget_xu) {
       return NextResponse.json({ success: false, message: 'Quảng cáo đã hết ngân sách.' }, { status: 409 });
+    }
+    if (Number(ad.budget_xu) - Number(ad.spent_xu) < Number(ad.reward_xu)) {
+      return NextResponse.json({ success: false, message: 'Ngân sách quảng cáo còn lại không đủ cho một lượt xem.' }, { status: 409 });
     }
     const todayCompleted = await query(
       `SELECT COUNT(*) AS c FROM ad_views

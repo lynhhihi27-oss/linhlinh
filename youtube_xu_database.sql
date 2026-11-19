@@ -66,6 +66,7 @@ CREATE TABLE ads (
     reward_xu      INT NOT NULL,
     budget_xu      INT NOT NULL,
     spent_xu       INT NOT NULL DEFAULT 0,
+    reserved_xu    INT NOT NULL DEFAULT 0,
     start_date     DATE NOT NULL,
     end_date       DATE NOT NULL,
     status         VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('DRAFT', 'PENDING', 'ACTIVE', 'PAUSED', 'ENDED', 'REJECTED')),
@@ -73,7 +74,7 @@ CREATE TABLE ads (
     reviewed_by    INT NULL,
     created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT chk_duration CHECK (duration_sec BETWEEN 5 AND 60),
-    CONSTRAINT chk_budget   CHECK (budget_xu > 0 AND spent_xu <= budget_xu),
+    CONSTRAINT chk_budget CHECK (budget_xu > 0 AND spent_xu >= 0 AND reserved_xu >= 0 AND spent_xu + reserved_xu <= budget_xu),
     CONSTRAINT chk_dates    CHECK (end_date >= start_date),
     CONSTRAINT fk_ads_advertiser FOREIGN KEY (advertiser_id) REFERENCES users(user_id),
     CONSTRAINT fk_ads_category   FOREIGN KEY (category_id)   REFERENCES ad_categories(category_id),
@@ -113,8 +114,16 @@ CREATE TABLE ad_views (
     reward_xu       INT NOT NULL DEFAULT 0,
     device_id       VARCHAR(64) NULL,
     ip_address      VARCHAR(45) NULL,
+    verification_provider VARCHAR(50) NULL,
+    verification_event_id NVARCHAR(200) NULL,
+    verified_at     DATETIME2 NULL,
     view_status     VARCHAR(20) NOT NULL DEFAULT 'STARTED' CHECK (view_status IN ('STARTED', 'COMPLETED', 'INVALID')),
     CONSTRAINT uq_user_ad_day UNIQUE (user_id, ad_id, view_date),
+    CONSTRAINT chk_ad_views_verification_fields CHECK (
+        (verification_provider IS NULL AND verification_event_id IS NULL AND verified_at IS NULL)
+        OR
+        (verification_provider IS NOT NULL AND verification_event_id IS NOT NULL AND verified_at IS NOT NULL)
+    ),
     CONSTRAINT fk_views_user FOREIGN KEY (user_id) REFERENCES users(user_id),
     CONSTRAINT fk_views_ad   FOREIGN KEY (ad_id)   REFERENCES ads(ad_id)
 );
@@ -148,6 +157,7 @@ CREATE TABLE redemptions (
     xu_spent      INT NOT NULL,
     gift_code     VARCHAR(50) NULL,
     status        VARCHAR(20) NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING', 'APPROVED', 'DELIVERED', 'REJECTED')),
+    status_reason NVARCHAR(500) NULL,
     requested_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     processed_at  DATETIME NULL,
     processed_by  INT NULL,

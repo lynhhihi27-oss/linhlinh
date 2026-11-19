@@ -10,13 +10,25 @@ export async function PATCH(request, { params }) {
     connection = await pool.getConnection();
 
     const redemptionId = params.id;
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ success: false, message: 'Dữ liệu xử lý đơn không hợp lệ.' }, { status: 400 });
+    }
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return NextResponse.json({ success: false, message: 'Dữ liệu xử lý đơn không hợp lệ.' }, { status: 400 });
     }
-    const { action, gift_code: submittedGiftCode } = body;
+    const { action, gift_code: submittedGiftCode, reason: submittedReason } = body;
     if (!/^\d+$/.test(String(redemptionId)) || !['APPROVE', 'REJECT'].includes(action)) {
       return NextResponse.json({ success: false, message: 'Thông tin xử lý đơn không hợp lệ.' }, { status: 400 });
+    }
+    if (submittedReason !== undefined && submittedReason !== null && typeof submittedReason !== 'string') {
+      return NextResponse.json({ success: false, message: 'Lý do xử lý đơn không hợp lệ.' }, { status: 400 });
+    }
+    const reason = typeof submittedReason === 'string' ? submittedReason.trim() : '';
+    if (reason.length > 500) {
+      return NextResponse.json({ success: false, message: 'Lý do xử lý đơn không được vượt quá 500 ký tự.' }, { status: 400 });
     }
 
     await connection.beginTransaction();
@@ -49,7 +61,7 @@ export async function PATCH(request, { params }) {
 
       await connection.execute(
         `UPDATE redemptions 
-         SET status = 'APPROVED', gift_code = ?, processed_at = NOW(), processed_by = ? 
+         SET status = 'APPROVED', gift_code = ?, status_reason = NULL, processed_at = NOW(), processed_by = ?
          WHERE redemption_id = ?`,
         [giftCode, auth.user.user_id, redemptionId]
       );
@@ -81,9 +93,9 @@ export async function PATCH(request, { params }) {
 
       await connection.execute(
         `UPDATE redemptions 
-         SET status = 'REJECTED', processed_at = NOW(), processed_by = ? 
+         SET status = 'REJECTED', status_reason = ?, processed_at = NOW(), processed_by = ?
          WHERE redemption_id = ?`,
-        [auth.user.user_id, redemptionId]
+        [reason || null, auth.user.user_id, redemptionId]
       );
 
       // Ghi sổ cái XU_TRANSACTIONS loại REFUND
@@ -102,7 +114,7 @@ export async function PATCH(request, { params }) {
       await connection.execute(
         `INSERT INTO Notifications (UserID, Title, Message, Type, IsRead, CreatedAt)
          VALUES (?, ?, ?, 'REDEMPTION_REJECTED', 0, NOW())`,
-        [order.user_id, 'Yêu cầu đổi quà bị từ chối', `Đơn đổi "${order.reward_name}" bị từ chối; ${order.xu_spent} Xu đã được hoàn lại.`]
+        [order.user_id, 'Yêu cầu đổi quà bị từ chối', `Đơn đổi "${order.reward_name}" bị từ chối; ${order.xu_spent} Xu đã được hoàn lại.${reason ? ` Lý do: ${reason}` : ''}`]
       );
 
       await connection.commit();

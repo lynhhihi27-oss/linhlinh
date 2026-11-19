@@ -1,10 +1,7 @@
 import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { requireSession } from '@/lib/auth';
-
-function today() {
-  return new Date().toISOString().slice(0, 10);
-}
+import { vietnamDateKey } from '@/lib/dates';
 
 export async function POST(request, { params }) {
   let connection;
@@ -18,7 +15,7 @@ export async function POST(request, { params }) {
     connection = await pool.getConnection();
     await connection.beginTransaction();
     inTransaction = true;
-    const date = today();
+    const date = vietnamDateKey();
     const [tasks] = await connection.execute(
       `SELECT TaskID, Title, RewardXu, TaskType, TargetCount
        FROM DailyTasks WHERE TaskID = ? AND IsActive = 1`,

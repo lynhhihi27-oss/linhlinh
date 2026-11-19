@@ -673,12 +673,12 @@ export default function YouTubeXuApp() {
   };
 
   // UC-06: Khóa / Mở khóa tài khoản nghi vấn
-  const handleToggleLockUser = async (targetUserId) => {
+  const handleToggleLockUser = async (targetUserId, action) => {
     try {
       const res = await fetch('/api/admin/fraud', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'TOGGLE_LOCK', target_user_id: targetUserId })
+        body: JSON.stringify({ action, target_user_id: targetUserId })
       });
       const data = await res.json();
       if (data.success) {
@@ -2087,7 +2087,7 @@ export default function YouTubeXuApp() {
                           <div className="admin-action-buttons" style={{ display: 'flex', gap: '8px' }}>
                             <button 
                               className={`btn btn-sm ${u.account_status === 'LOCKED' ? 'btn-secondary' : 'btn-primary'}`}
-                              onClick={() => handleToggleLockUser(u.user_id)}
+                              onClick={() => handleToggleLockUser(u.user_id, u.account_status === 'LOCKED' ? 'UNLOCK_USER' : 'LOCK_USER')}
                               style={{ padding: '4px 10px', fontSize: '0.78rem' }}
                             >
                               {u.account_status === 'LOCKED' ? <Unlock size={13} /> : <Lock size={13} />}

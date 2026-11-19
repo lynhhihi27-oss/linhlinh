@@ -9,16 +9,26 @@ export async function GET(request) {
     const auth = await requireSession(request, ['ADMIN']);
     if (auth.response) return auth.response;
 
-    // Lấy danh sách tài khoản nghi vấn: bị LOCKED hoặc có lượt xem INVALID
     const suspiciousUsers = await query(
-      `SELECT u.user_id, u.full_name, u.email, u.phone, u.account_status, u.xu_balance,
-              COUNT(v.view_id) AS total_views,
-              SUM(CASE WHEN v.view_status = 'INVALID' THEN 1 ELSE 0 END) AS invalid_views
+      `WITH shared_devices AS (
+         SELECT device_id
+         FROM ad_views
+         WHERE device_id IS NOT NULL
+         GROUP BY device_id
+         HAVING COUNT(DISTINCT user_id) >= 4
+       )
+       SELECT u.user_id, u.full_name, u.email, u.phone, u.account_status, u.xu_balance,
+              COUNT(DISTINCT v.view_id) AS total_views,
+              COALESCE(SUM(CASE WHEN v.view_status = 'INVALID' THEN 1 ELSE 0 END), 0) AS invalid_views,
+              COUNT(DISTINCT shared_devices.device_id) AS shared_device_count
        FROM users u
        LEFT JOIN ad_views v ON u.user_id = v.user_id
+       LEFT JOIN shared_devices ON shared_devices.device_id = v.device_id
        WHERE u.system_role = 'VIEWER'
        GROUP BY u.user_id, u.full_name, u.email, u.phone, u.account_status, u.xu_balance
-       ORDER BY invalid_views DESC, u.account_status ASC, u.user_id DESC`
+       HAVING COALESCE(SUM(CASE WHEN v.view_status = 'INVALID' THEN 1 ELSE 0 END), 0) > 0
+          OR COUNT(DISTINCT shared_devices.device_id) > 0
+       ORDER BY shared_device_count DESC, invalid_views DESC, u.user_id DESC`
     );
 
     // Lấy danh sách lượt xem INVALID gần đây
@@ -49,7 +59,12 @@ export async function POST(request) {
     if (auth.response) return auth.response;
     connection = await pool.getConnection();
 
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ success: false, message: 'Dữ liệu yêu cầu không hợp lệ.' }, { status: 400 });
+    }
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return NextResponse.json({ success: false, message: 'Dữ liệu yêu cầu không hợp lệ.' }, { status: 400 });
     }
@@ -61,15 +76,17 @@ export async function POST(request) {
 
     await connection.beginTransaction();
 
-    if (action === 'TOGGLE_LOCK') {
-      const [users] = await connection.execute('SELECT account_status FROM users WHERE user_id = ?', [targetUserId]);
+    if (['TOGGLE_LOCK', 'LOCK_USER', 'UNLOCK_USER'].includes(action)) {
+      const [users] = await connection.execute('SELECT account_status FROM users WHERE user_id = ? FOR UPDATE', [targetUserId]);
       if (users.length === 0) {
         await connection.rollback();
         return NextResponse.json({ success: false, message: 'Không tìm thấy người dùng' }, { status: 404 });
       }
 
-      const newStatus = users[0].account_status === 'ACTIVE' ? 'LOCKED' : 'ACTIVE';
-      await connection.execute('UPDATE users SET account_status = ? WHERE user_id = ?', [newStatus, targetUserId]);
+      const newStatus = action === 'UNLOCK_USER' ? 'ACTIVE' : 'LOCKED';
+      if (users[0].account_status !== newStatus) {
+        await connection.execute('UPDATE users SET account_status = ? WHERE user_id = ?', [newStatus, targetUserId]);
+      }
       await connection.commit();
 
       return NextResponse.json({
@@ -98,21 +115,30 @@ export async function POST(request) {
 
       const newBalance = Math.max(0, currentBalance - amountToRevoke);
       const actualDeducted = currentBalance - newBalance;
+      const shortfall = amountToRevoke - actualDeducted;
 
-      await connection.execute('UPDATE users SET xu_balance = ? WHERE user_id = ?', [newBalance, targetUserId]);
+      if (actualDeducted > 0) {
+        await connection.execute('UPDATE users SET xu_balance = ? WHERE user_id = ?', [newBalance, targetUserId]);
 
-      // Ghi sổ cái XU_TRANSACTIONS loại ADJUST
+        await connection.execute(
+          `INSERT INTO xu_transactions (user_id, view_id, redemption_id, txn_type, amount, balance_after, note, created_at)
+           VALUES (?, NULL, NULL, 'ADJUST', ?, ?, ?, NOW())`,
+          [targetUserId, -actualDeducted, newBalance, `Admin thu hồi xu: ${typeof reason === 'string' ? reason.slice(0, 150) : 'Vi phạm điều khoản xem'}${shortfall ? `; còn thiếu ${shortfall} xu` : ''}`]
+        );
+      }
       await connection.execute(
-        `INSERT INTO xu_transactions (user_id, view_id, redemption_id, txn_type, amount, balance_after, note, created_at)
-         VALUES (?, NULL, NULL, 'ADJUST', ?, ?, ?, NOW())`,
-        [targetUserId, -actualDeducted, newBalance, `Admin thu hồi xu gian lận: ${typeof reason === 'string' ? reason.slice(0, 200) : 'Vi phạm điều khoản xem'}`]
+        `UPDATE ad_views SET view_status = 'INVALID'
+         WHERE user_id = ? AND view_status = 'COMPLETED' AND verified_at IS NULL`,
+        [targetUserId]
       );
 
       await connection.commit();
       return NextResponse.json({
         success: true,
-        message: `Đã thu hồi thành công ${actualDeducted} xu! Số dư hiện tại là ${newBalance} xu.`,
-        new_balance: newBalance
+        message: `Đã thu hồi ${actualDeducted} xu${shortfall ? `; còn thiếu ${shortfall} xu` : ''}. Số dư hiện tại là ${newBalance} xu.`,
+        new_balance: newBalance,
+        revoked_xu: actualDeducted,
+        shortfall_xu: shortfall
       });
     }
 

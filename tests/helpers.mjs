@@ -5,14 +5,18 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { db, resetDb, injectFault, stats } from './setup/fake-db.mjs';
 import { createSessionCookie } from '../lib/auth.js';
+import { vietnamDateKey } from '../lib/dates.js';
 
 export { db, injectFault, stats };
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 export const API_DIR = join(ROOT, 'app', 'api');
 
 /* ------------------------------ ngày giờ ------------------------------ */
-export const TODAY = () => new Date().toISOString().split('T')[0];
-export const dayOffset = n => new Date(Date.now() + n * 864e5).toISOString().split('T')[0];
+export const TODAY = () => vietnamDateKey();
+export const dayOffset = n => {
+  const [year, month, day] = vietnamDateKey().split('-').map(Number);
+  return new Date(Date.UTC(year, month - 1, day + n)).toISOString().slice(0, 10);
+};
 
 /* ------------------------------ gọi route ------------------------------ */
 export const routeExists = rel => fs.existsSync(join(API_DIR, rel, 'route.js'));

@@ -186,7 +186,13 @@ export default function FeaturePanels({
               <select className="form-select" value={period} onChange={event => setPeriod(event.target.value)} aria-label="Lọc báo cáo theo thời gian">
                 {PERIODS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
               </select>
-              <DownloadCsv rows={data?.chart || []} filename="youtube-xu-report.csv" />
+              {user.system_role === 'ADMIN' ? (
+                <a className="btn btn-secondary btn-sm" href={`/api/admin/reports/export?period=${encodeURIComponent(period)}`}>
+                  Xuất báo cáo CSV
+                </a>
+              ) : (
+                <DownloadCsv rows={data?.chart || []} filename="youtube-xu-report.csv" />
+              )}
             </div>
           </div>
           <div className="feature-metrics-grid">
@@ -197,6 +203,7 @@ export default function FeaturePanels({
                 <Metric label="Xu đã phát hành" value={data?.stats.xu_issued} />
                 <Metric label="Xu đã dùng (đổi quà)" value={data?.stats.xu_redeemed} tone="rose" />
                 <Metric label="Xu chiến dịch đã chi (tích lũy)" value={data?.stats.campaign_spend} tone="gold" />
+                <Metric label="Ngân sách chiến dịch đang giữ" value={data?.stats.reserved_campaign_budget} tone="gold" />
                 <Metric label="Giao dịch" value={data?.stats.total_transactions} tone="blue" />
                 <Metric label="Lượt xem hợp lệ" value={data?.stats.valid_views} tone="green" />
                 <Metric label="Lượt xem không hợp lệ" value={data?.stats.invalid_views} tone="rose" />
@@ -210,6 +217,8 @@ export default function FeaturePanels({
                 <Metric label="Tổng lượt xem" value={data?.stats.total_views} tone="blue" />
                 <Metric label="Lượt xem hợp lệ" value={data?.stats.valid_views} tone="green" />
                 <Metric label="Không hợp lệ" value={data?.stats.invalid_views} tone="rose" />
+                <Metric label="Ngân sách đã chi" value={data?.stats.campaign_spend} tone="gold" />
+                <Metric label="Ngân sách đang giữ" value={data?.stats.reserved_campaign_budget} tone="gold" />
               </>
             )}
           </div>

@@ -30,6 +30,8 @@ Mặc định ứng dụng kết nối tới `localhost\SQLEXPRESS`, cơ sở d�
    sqlcmd -S ".\SQLEXPRESS" -E -b -f i:65001 -i ".\migrations\20261022_add_demo_video_campaigns.sql"
    sqlcmd -S ".\SQLEXPRESS" -E -b -f i:65001 -i ".\migrations\20261110_add_sprint5_features.sql"
    sqlcmd -S ".\SQLEXPRESS" -E -b -f i:65001 -i ".\migrations\20261119_add_ad_view_verification.sql"
+   sqlcmd -S ".\SQLEXPRESS" -E -b -f i:65001 -i ".\migrations\20261120_add_campaign_budget_reserve.sql"
+   sqlcmd -S ".\SQLEXPRESS" -E -b -f i:65001 -i ".\migrations\20261120_add_redemption_status_reason.sql"
    ```
 
    Các migration không xóa dữ liệu hiện có. Migration video có thể chạy lại an toàn; migration đổi quà thêm cột khóa yêu cầu tùy chọn và unique index có lọc, các đơn cũ giữ nguyên `NULL`.
@@ -87,6 +89,8 @@ Mặc định ứng dụng kết nối tới `localhost\SQLEXPRESS`, cơ sở d�
 - Migration `20261119_add_ad_view_verification.sql` chỉ thêm cột/xác thực cho bằng chứng nhà cung cấp; các lượt `COMPLETED` cũ được giữ nguyên nhưng không được xem là xác minh hợp lệ nếu chưa có bằng chứng.
 - OTP chưa được bật vì chưa cấu hình nhà cung cấp. API trả `503 OTP_PROVIDER_NOT_CONFIGURED`, không phát sinh hoặc trả mã OTP thử nghiệm.
 - Các yêu cầu đổi quà giữ chỗ Xu và tồn kho ở trạng thái chờ. Quản trị viên chỉ được phê duyệt sau khi nhập mã quà thật do nhà cung cấp cấp; ứng dụng không tự sinh mã giả.
+- Khi tạo chiến dịch, ngân sách được giữ trong ví nhà quảng cáo và ghi vào sổ cái; chiến dịch bị từ chối/kết thúc hoàn lại phần ngân sách chưa sử dụng. Các chiến dịch cũ chưa được ghi nhận giữ chỗ không bị hoàn tự động.
+- Các lượt xem, nhiệm vụ và hạn mức theo ngày dùng ngày lịch Việt Nam (Asia/Ho_Chi_Minh), không phụ thuộc múi giờ máy chủ.
 - API đổi quà yêu cầu migration `20261022_add_redemption_idempotency.sql` để lặp lại cùng request key không trừ Xu hoặc tồn kho lần nữa.
 - Dữ liệu tài khoản, quảng cáo, quà và giao dịch trong script khởi tạo là dữ liệu mẫu phục vụ trình diễn, không phải hàng hóa/mã đổi quà thực tế.
 

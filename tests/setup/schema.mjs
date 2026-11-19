@@ -33,6 +33,7 @@ CREATE TABLE ads (
   reward_xu INTEGER NOT NULL,
   budget_xu INTEGER NOT NULL,
   spent_xu INTEGER NOT NULL DEFAULT 0,
+  reserved_xu INTEGER NOT NULL DEFAULT 0,
   start_date DATE NOT NULL,
   end_date DATE NOT NULL,
   status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('DRAFT','PENDING','ACTIVE','PAUSED','ENDED','REJECTED')),
@@ -40,7 +41,7 @@ CREATE TABLE ads (
   reviewed_by INTEGER NULL REFERENCES users(user_id),
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   CONSTRAINT chk_duration CHECK (duration_sec BETWEEN 5 AND 60),
-  CONSTRAINT chk_budget CHECK (budget_xu > 0 AND spent_xu <= budget_xu),
+  CONSTRAINT chk_budget CHECK (budget_xu > 0 AND spent_xu >= 0 AND reserved_xu >= 0 AND spent_xu + reserved_xu <= budget_xu),
   CONSTRAINT chk_dates CHECK (end_date >= start_date)
 );
 CREATE TABLE ad_targeting (
@@ -87,6 +88,7 @@ CREATE TABLE redemptions (
   xu_spent INTEGER NOT NULL,
   gift_code TEXT NULL,
   status TEXT NOT NULL DEFAULT 'PENDING' CHECK (status IN ('PENDING','APPROVED','DELIVERED','REJECTED')),
+  status_reason TEXT NULL,
   requested_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   processed_at DATETIME NULL,
   processed_by INTEGER NULL REFERENCES users(user_id)

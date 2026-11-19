@@ -11,8 +11,8 @@ const validAd = (o = {}) => ({
   duration_sec: 30, reward_xu: 10, budget_xu: 5000, start_date: dayOffset(1), end_date: dayOffset(30),
   target_gender: 'FEMALE', target_age_from: 18, target_age_to: 24, target_province: 'Hà Nội', ...o,
 });
-const createAd = o => call('ads', 'POST', { body: validAd(o) });
-const setStatus = (id, body) => call('ads/[id]/status', 'PATCH', { params: { id }, body });
+const createAd = o => call('ads', 'POST', { body: validAd(o), headers: as(2) });
+const setStatus = (id, body) => call('ads/[id]/status', 'PATCH', { params: { id }, body, headers: as(1) });
 const fraud = body => call('admin/fraud', 'POST', { body, headers: as(1) });
 const adStatus = id => one('SELECT status AS s FROM ads WHERE ad_id = ?', id).s;
 const tierReward = d => (d <= 15 ? 5 : d <= 30 ? 10 : 20);
