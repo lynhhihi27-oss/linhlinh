@@ -1,7 +1,6 @@
 // Kiểm thử bảo mật (TEST-01 §Bổ sung "Kiểm thử bảo mật") + API-01 §Xác thực và phân quyền:
 //   "API yêu cầu JWT hợp lệ; kiểm tra role và quyền sở hữu ở phía máy chủ. Không tin role hoặc user_id do client tự gửi."
-// Vì ứng dụng không phát hành token, danh tính "người gọi" được mô phỏng bằng header x-user-id
-// (chính là quy ước mà route /auth/me đang dùng).
+// Các yêu cầu đã đăng nhập dùng cookie phiên HMAC; giả lập header/query/body không phải xác thực.
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { seedBase, call, one, balance, redeem, addUserWithLedger, dayOffset, as } from './helpers.mjs';
@@ -26,10 +25,8 @@ describe('Thiếu xác thực: mọi API phải trả 401 khi không có token h
     ['POST /api/views/start', 'views/start', 'POST', { body: { user_id: 5, ad_id: 1 } }],
     ['POST /api/views/complete', 'views/complete', 'POST', { body: { user_id: 5, ad_id: 1, view_token: 'tok_x', watched_seconds: 30 } }],
     ['GET /api/wallet', 'wallet', 'GET', { query: { userId: 5 } }],
-    ['GET /api/auth/me', 'auth/me', 'GET', { query: { userId: 5 } }],
     ['GET /api/affiliate', 'affiliate', 'GET', { query: { userId: 5 } }],
     ['GET /api/redemptions', 'redemptions', 'GET', { query: { userId: 5 } }],
-    ['GET /api/ads?role=ADMIN', 'ads', 'GET', { query: { role: 'ADMIN' } }],
     ['POST /api/ads', 'ads', 'POST', { body: validAd() }],
     ['PATCH /api/ads/[id]/status', 'ads/[id]/status', 'PATCH', { params: { id: 4 }, body: { status: 'ACTIVE' } }],
     ['PATCH /api/redemptions/[id]/process', 'redemptions/[id]/process', 'PATCH', { params: { id: orderId }, body: { action: 'APPROVE' } }],
@@ -41,8 +38,8 @@ describe('Thiếu xác thực: mọi API phải trả 401 khi không có token h
 
   // Số lượng endpoint cố định nên khai báo test bằng danh sách tĩnh (orderId chỉ có sau beforeEach).
   const labels = [
-    'POST /api/redeem', 'POST /api/views/start', 'POST /api/views/complete', 'GET /api/wallet', 'GET /api/auth/me',
-    'GET /api/affiliate', 'GET /api/redemptions', 'GET /api/ads?role=ADMIN', 'POST /api/ads', 'PATCH /api/ads/[id]/status',
+    'POST /api/redeem', 'POST /api/views/start', 'POST /api/views/complete', 'GET /api/wallet',
+    'GET /api/affiliate', 'GET /api/redemptions', 'POST /api/ads', 'PATCH /api/ads/[id]/status',
     'PATCH /api/redemptions/[id]/process', 'POST /api/rewards', 'GET /api/admin/stats', 'GET /api/admin/fraud', 'POST /api/admin/fraud',
   ];
   labels.forEach((label, i) => {
@@ -59,26 +56,30 @@ describe('Thiếu xác thực: mọi API phải trả 401 khi không có token h
 describe('Phân quyền theo vai trò và quyền sở hữu (IDOR)', () => {
   beforeEach(() => seedBase());
 
-  it('SEC-28 | Viewer không đọc được ví/lịch sử giao dịch của người khác', async () => {
+  it('SEC-28 | userId trong query không thể đổi ví đang đăng nhập', async () => {
     const r = await call('wallet', 'GET', { query: { userId: 8 }, headers: as(5) });
-    assert.equal(r.status, 403, `Viewer #5 đọc được ví của #8 (số dư ${r.body?.balance}, ${r.body?.transactions?.length ?? 0} giao dịch): server tin ?userId`);
+    assert.equal(r.status, 200);
+    assert.equal(r.body.balance, 1520, 'API trả ví của userId trong query thay vì session user');
   });
 
-  it('SEC-29 | Viewer không đọc được hồ sơ cá nhân (email, SĐT, số dư) của người khác', async () => {
+  it('SEC-29 | userId trong query không thể đổi hồ sơ đang đăng nhập', async () => {
     const r = await call('auth/me', 'GET', { query: { userId: 6 }, headers: as(5) });
-    assert.equal(r.status, 403, `Viewer #5 đọc được hồ sơ #6: ${r.body?.user?.email} / ${r.body?.user?.phone}`);
+    assert.equal(r.status, 200);
+    assert.equal(r.body.user.user_id, 5);
+    assert.notEqual(r.body.user.email, 'nhi.lt@gmail.com');
   });
 
   it('SEC-30 | Viewer không xem được mã thẻ/voucher của người khác (qua ?role=ADMIN hoặc ?userId=)', async () => {
     const victim = addUserWithLedger(1500);
-    const code = (await redeem(victim, 1)).body.gift_code;
-    assert.ok(code, 'chuẩn bị dữ liệu: nạn nhân phải có mã thẻ');
+    const order = await redeem(victim, 1);
+    assert.equal(order.body.status, 'PENDING');
+    assert.equal(order.body.gift_code, null, 'hệ thống không được tự tạo mã quà giả');
     const leaks = [];
     for (const query of [{ role: 'ADMIN' }, { userId: victim }]) {
       const r = await call('redemptions', 'GET', { query, headers: as(5) });
-      if (r.raw.includes(code)) leaks.push(JSON.stringify(query));
+      if (r.body.redemptions.some((item) => Number(item.user_id) === victim)) leaks.push(JSON.stringify(query));
     }
-    assert.deepEqual(leaks, [], `Mã thẻ ${code} của người khác bị lộ cho Viewer #5 qua: ${leaks.join(' ; ')} (mã thẻ = tiền thật)`);
+    assert.deepEqual(leaks, [], `Lịch sử đổi quà của người khác bị lộ cho Viewer #5 qua: ${leaks.join(' ; ')}`);
   });
 
   it('SEC-31 | Viewer không thể đổi quà bằng xu của người khác (sửa user_id trong request)', async () => {
@@ -95,7 +96,19 @@ describe('Phân quyền theo vai trò và quyền sở hữu (IDOR)', () => {
 
   it('SEC-33 | Nhà quảng cáo không thể tự duyệt quảng cáo của chính mình', async () => {
     const r = await call('ads/[id]/status', 'PATCH', { params: { id: 4 }, body: { status: 'ACTIVE', reviewed_by: 1 }, headers: as(2) });
-    assert.equal(r.status, 403, `Nhà QC #2 tự chuyển QC #4 sang ACTIVE (HTTP ${r.status}), bỏ qua bước Admin duyệt`);
+    assert.ok([403, 409].includes(r.status), `Nhà QC #2 tự duyệt quảng cáo (HTTP ${r.status})`);
+    assert.equal(one('SELECT status FROM ads WHERE ad_id = 4').status, 'PENDING');
+  });
+
+  describe('Endpoint công khai', () => {
+    beforeEach(() => seedBase());
+
+    it('khách có thể xem quảng cáo nhưng không thể nâng quyền qua query role', async () => {
+      const result = await call('ads', 'GET', { query: { role: 'ADMIN' } });
+
+      assert.equal(result.status, 200);
+      assert.ok(result.body.ads.every((ad) => ad.status === 'ACTIVE'));
+    });
   });
 
   it('SEC-34 | Viewer không thể khóa tài khoản hoặc thu hồi xu của người khác', async () => {

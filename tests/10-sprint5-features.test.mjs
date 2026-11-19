@@ -66,7 +66,13 @@ describe('Sprint 5 – notifications and leaderboard', () => {
   });
 
   it('ranks only positive valid earnings and returns a private-safe profile', async () => {
-    const valid = addView({ user_id: 5, ad_id: 1 });
+    const valid = addView({
+      user_id: 5,
+      ad_id: 1,
+      verification_provider: 'test-provider',
+      verification_event_id: 'valid-view-1',
+      verified_at: new Date().toISOString()
+    });
     const invalid = addView({ user_id: 5, ad_id: 2, view_status: 'INVALID' });
     addTxn(5, 'EARN', 100, 100);
     addTxn(5, 'EARN', 500, 600, { view_id: valid });
@@ -127,7 +133,13 @@ describe('Sprint 5 – daily tasks', () => {
   });
 
   it('uses completed server-side views as progress and supports daily reset by date', async () => {
-    addView({ user_id: 5, ad_id: 1 });
+    addView({
+      user_id: 5,
+      ad_id: 1,
+      verification_provider: 'test-provider',
+      verification_event_id: 'valid-view-2',
+      verified_at: new Date().toISOString()
+    });
     const tasks = await call('daily-tasks', 'GET', { headers: auth(5) });
     assert.equal(tasks.status, 200, tasks.raw);
     assert.equal(tasks.body.tasks.find(task => task.TaskID === 2).progress, 1);
@@ -168,7 +180,14 @@ describe('Sprint 5 – support and role-scoped reports', () => {
   });
 
   it('restricts advertiser reports to owned campaigns and counts ledger rows once', async () => {
-    addView({ user_id: 5, ad_id: 1, view_status: 'COMPLETED' });
+    addView({
+      user_id: 5,
+      ad_id: 1,
+      view_status: 'COMPLETED',
+      verification_provider: 'test-provider',
+      verification_event_id: 'valid-view-3',
+      verified_at: new Date().toISOString()
+    });
     addView({ user_id: 5, ad_id: 3, view_status: 'INVALID' });
     addTxn(5, 'EARN', 25, 25);
     addTxn(5, 'EARN', 25, 50);

@@ -1,8 +1,8 @@
-// Thay thế lib/db.js (mysql2) bằng SQLite in-memory để chạy SQL THẬT của ứng dụng.
+// Thay thế lib/db.js (SQL Server) bằng SQLite in-memory để kiểm tra logic route.
 //
 // Mô hình giao dịch: mỗi transaction được xếp hàng tuần tự (như thể mọi `SELECT ... FOR UPDATE`
 // đều khóa đúng). Nhờ đó các test song song kiểm tra được "logic có đúng khi các transaction
-// chạy xen kẽ hay không" mà không cần MySQL thật. Các truy vấn KHÔNG nằm trong transaction
+// chạy xen kẽ hay không" mà không cần SQL Server thật. Các truy vấn KHÔNG nằm trong transaction
 // (vd. views/start) vẫn xen kẽ thật tại mỗi `await`, nên lỗi check-then-act vẫn lộ ra.
 import { DatabaseSync } from 'node:sqlite';
 import { SCHEMA } from './schema.mjs';
@@ -48,7 +48,7 @@ function translate(sql) {
 function run(sql, params = []) {
   const f = faults.find(x => x.times > 0 && x.pattern.test(sql));
   if (f) { f.times--; throw f.error; }
-  // mysql2 ném lỗi khi bind undefined -> mô phỏng đúng hành vi này
+  // SQL adapter rejects undefined bind values; simulate the same input failure.
   if (params.some(p => p === undefined)) {
     throw new TypeError('Bind parameters must not contain undefined. To pass SQL NULL specify JS null');
   }
@@ -76,10 +76,10 @@ const pool = {
     return {
       async beginTransaction() { releaseTx = await acquireTx(); db.exec('BEGIN'); inTx = true; },
       async commit() { if (inTx) db.exec('COMMIT'); finish(); },
-      async rollback() { if (inTx) db.exec('ROLLBACK'); finish(); },   // MySQL: rollback khi không có txn = no-op
+      async rollback() { if (inTx) db.exec('ROLLBACK'); finish(); },   // Rollback without a transaction is a no-op.
       async execute(sql, params = []) { return [run(sql, params), []]; },
       release() {
-        // Trả connection về pool khi transaction còn mở = rò rỉ (MySQL thật sẽ giữ khóa mãi).
+        // Returning a connection with an open transaction would leak locks on SQL Server.
         if (inTx) { stats.leaked++; db.exec('ROLLBACK'); }
         finish();
       },

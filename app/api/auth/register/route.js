@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server.js';
 import { query } from '@/lib/db';
 import crypto from 'crypto';
 import { assertSessionConfig, createSessionCookie, hashPassword } from '@/lib/auth';
@@ -6,7 +6,12 @@ import { assertSessionConfig, createSessionCookie, hashPassword } from '@/lib/au
 export async function POST(request) {
   try {
     assertSessionConfig();
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ success: false, message: 'Dữ liệu đăng ký không hợp lệ.' }, { status: 400 });
+    }
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return NextResponse.json({ success: false, message: 'Dữ liệu đăng ký không hợp lệ.' }, { status: 400 });
     }
@@ -51,6 +56,10 @@ export async function POST(request) {
       return NextResponse.json({ success: false, message: 'Người dùng phải từ đủ 16 tuổi trở lên để tham gia hệ thống!' }, { status: 400 });
     }
 
+    if (typeof password !== 'string' || password.length < 8 || password.length > 128) {
+      return NextResponse.json({ success: false, message: 'Mật khẩu phải có từ 8 đến 128 ký tự.' }, { status: 400 });
+    }
+
     // Kiểm tra trùng lặp email hoặc SĐT
     const existing = await query(
       'SELECT user_id FROM users WHERE email = ? OR phone = ? LIMIT 1',
@@ -58,17 +67,17 @@ export async function POST(request) {
     );
 
     if (existing.length > 0) {
-      return NextResponse.json({ success: false, message: 'Email hoặc Số điện thoại này đã được đăng ký trên hệ thống!' }, { status: 400 });
+      return NextResponse.json({ success: false, message: 'Email hoặc Số điện thoại này đã được đăng ký trên hệ thống!' }, { status: 409 });
     }
 
     // Resolve an invite code once so an invalid code cannot silently discard attribution.
     let referredBy = null;
     if (referral_code) {
       const refUsers = await query(
-        'SELECT user_id FROM users WHERE referral_code = ? LIMIT 1',
+        'SELECT user_id, account_status FROM users WHERE referral_code = ? LIMIT 1',
         [referral_code.trim().toUpperCase()]
       );
-      if (refUsers.length === 0) {
+      if (refUsers.length === 0 || refUsers[0].account_status !== 'ACTIVE') {
         return NextResponse.json({ success: false, message: 'Mã giới thiệu không hợp lệ!' }, { status: 400 });
       }
       referredBy = refUsers[0].user_id;

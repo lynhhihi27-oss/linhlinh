@@ -1,9 +1,8 @@
 # Bộ kiểm thử tự động – YouTube Xu
 
-Bộ test này gọi **trực tiếp các route handler thật** trong `app/api/**/route.js` và chạy **đúng các câu SQL thật** của ứng dụng,
-nhưng thay MySQL bằng một CSDL SQLite chạy trong bộ nhớ (dựng theo schema của nhóm). Nhờ vậy:
+Bộ test này gọi **trực tiếp các route handler thật** trong `app/api/**/route.js` và chạy các câu SQL qua một adapter SQLite chạy trong bộ nhớ (dựng theo schema của nhóm). Đây không phải kiểm thử tích hợp Microsoft SQL Server. Nhờ vậy:
 
-- Không cần MySQL/XAMPP, không cần `npm install` thêm gì, chạy toàn bộ trong vài giây.
+- Không cần kết nối SQL Server để kiểm tra logic route.
 - Không sửa một dòng nào trong mã nguồn của ứng dụng.
 
 ## Cách chạy
@@ -51,19 +50,19 @@ Muốn dùng `npm test`, thêm hai dòng vào mục `scripts` của `package.jso
 |---|---|
 | `setup/register.mjs` | nạp trước mọi test: kiểm tra phiên bản Node, đăng ký hook, tắt log lỗi |
 | `setup/hooks.mjs` | đổi `@/lib/db` → `fake-db.mjs`, `next/server` → `next-server-stub.mjs` |
-| `setup/fake-db.mjs` | SQLite thay mysql2: dịch `FOR UPDATE`, `NOW()`, `ON DUPLICATE KEY UPDATE`, `CONCAT`; mỗi transaction chạy tuần tự (mô phỏng khóa dòng); `injectFault()` ép CSDL lỗi giữa chừng; đếm kết nối bị “rò” (transaction không đóng) |
+| `setup/fake-db.mjs` | SQLite thay `lib/db.js` trong test: dịch một phần cú pháp T-SQL/SQL ứng dụng; mỗi transaction chạy tuần tự (mô phỏng khóa dòng); `injectFault()` ép CSDL lỗi giữa chừng; đếm kết nối bị “rò” (transaction không đóng) |
 | `setup/schema.mjs` | DDL tương đương `youtube_xu_database.sql` (thêm cột `users.referral_code` mà code đang dùng) cùng các ràng buộc `CHECK`/`UNIQUE` |
 | `helpers.mjs` | `call()` gọi route; dữ liệu mẫu `seedBase()`; `start/complete/watchFully/redeem`; `backdate()` lùi giờ bắt đầu để giả lập thời gian trôi (không phải chờ thật); `ledgerViolations()` đối soát sổ cái |
 | `0x-*.test.mjs` | các test; mỗi test chạy trên CSDL mới |
 
 ## Giới hạn cần biết
 
-1. **SQLite ≠ MySQL 8.** Kiểu dữ liệu trả về (mysql2 trả `SUM` dạng chuỗi), collation không phân biệt hoa thường, kiểm tra độ dài `VARCHAR`, cơ chế khóa dòng… có thể khác. Kết quả là bằng chứng về *logic*, không thay thế một lần chạy trên XAMPP với CSDL `youtube_xu` thật.
+1. **SQLite ≠ Microsoft SQL Server.** Kiểu dữ liệu, collation, kiểm tra độ dài, transaction, locking và cú pháp T-SQL có thể khác. Kết quả là bằng chứng về *logic*, không thay thế kiểm thử tích hợp trên SQL Server thật.
 2. **Đồng thời:** transaction được xếp hàng tuần tự nên mô hình `SELECT … FOR UPDATE` được giả định hoạt động đúng. Các truy vấn nằm ngoài transaction (ví dụ `views/start`) vẫn xen kẽ thật.
 3. **Chưa phủ:** giao diện React, hiệu năng 500 người xem (TC-046), responsive di động (TC-047). TC-014 chỉ được kiểm tra bằng đọc mã nguồn giao diện.
-4. **Xác thực:** ứng dụng chưa có token nên các test phân quyền mô phỏng “người gọi” bằng header `x-user-id` (cách `/api/auth/me` đang đọc). Khi nhóm làm JWT, chỉ cần sửa hàm `as()` trong `helpers.mjs` để gửi `Authorization: Bearer …`.
+4. **Xác thực:** các test phân quyền dùng cookie phiên HMAC ký bằng `createSessionCookie()` trong helper `as()`. Header `x-user-id`, query parameter và dữ liệu trong request body không được xem là danh tính.
 5. Các test `EXT/SEC/CT/INT/AFF` phản ánh cách hiểu yêu cầu của người viết test. Nếu nhóm quyết định yêu cầu khác (ví dụ chấp nhận mã 400 thay vì 409) thì sửa test và tài liệu cho khớp thay vì sửa mã.
 
 ## Sau khi sửa lỗi
 
-Chạy lại `node tests/run.mjs`: test chuyển từ `✖` sang `✔` là bằng chứng đã sửa. Với các test case giao diện và hiệu năng, chạy tay hoặc bằng k6/JMeter rồi cập nhật cột “Trạng thái” trong TC-01.xlsx. Theo TEST-01, chỉ kết luận đạt ≥ 90% sau khi đã chạy thật trên môi trường MySQL 8.
+Chạy lại `node tests/run.mjs`: test chuyển từ `✖` sang `✔` là bằng chứng đã sửa. Với các test case giao diện và hiệu năng, chạy tay hoặc bằng k6/JMeter rồi cập nhật cột “Trạng thái” trong TC-01.xlsx. Không kết luận kiểm thử tích hợp SQL Server đạt khi chưa chạy trên database SQL Server thật.

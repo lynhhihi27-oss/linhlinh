@@ -7,6 +7,8 @@ export async function POST(request) {
 
   return NextResponse.json({
     success: false,
-    message: 'Chưa thể cộng Xu: ứng dụng chưa tích hợp dịch vụ xác minh lượt phát quảng cáo.'
+    verification_mode: 'SANDBOX',
+    error: 'AD_VERIFICATION_NOT_CONFIGURED',
+    message: 'Chưa tích hợp nhà cung cấp xác minh quảng cáo. Phiên xem thử không được cộng Xu.'
   }, { status: 503 });
 }

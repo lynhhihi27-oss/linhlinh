@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server.js';
 import pool, { query } from '@/lib/db';
 import { getSessionUser, requireSession } from '@/lib/auth';
 
@@ -28,9 +28,8 @@ export async function GET(request) {
       }
       sql += ' ORDER BY a.ad_id DESC';
       const ads = await query(sql, params);
-      return NextResponse.json({ success: true, ads });
+      return NextResponse.json({ success: true, verification_mode: 'SANDBOX', ads });
     }
-
     if (user?.system_role === 'ADVERTISER') {
       const sql = `
         SELECT a.*, c.category_name
@@ -40,7 +39,7 @@ export async function GET(request) {
         ORDER BY a.ad_id DESC
       `;
       const ads = await query(sql, [user.user_id]);
-      return NextResponse.json({ success: true, ads });
+      return NextResponse.json({ success: true, verification_mode: 'SANDBOX', ads });
     }
 
     const userId = user?.user_id ?? null;
@@ -48,34 +47,49 @@ export async function GET(request) {
     let sql = `
       SELECT a.*, c.category_name, u.full_name AS advertiser_name,
         (SELECT COUNT(*) FROM ad_views v 
-         WHERE v.ad_id = a.ad_id AND v.user_id = ? AND v.view_date = ? AND v.view_status = 'COMPLETED') AS viewed_today
+         WHERE v.ad_id = a.ad_id AND v.user_id = ? AND v.view_date = ? AND v.view_status = 'COMPLETED'
+           AND v.verified_at IS NOT NULL) AS viewed_today
       FROM ads a
       JOIN ad_categories c ON a.category_id = c.category_id
       JOIN users u ON a.advertiser_id = u.user_id
-      LEFT JOIN users viewer ON viewer.user_id = ?
       WHERE a.status = 'ACTIVE' 
         AND a.spent_xu < a.budget_xu
         AND ? BETWEEN a.start_date AND a.end_date
-        AND (
-          NOT EXISTS (
-            SELECT 1 FROM ad_targeting restriction
-            WHERE restriction.ad_id = a.ad_id
-              AND (
-                restriction.age_from IS NOT NULL OR restriction.age_to IS NOT NULL OR
-                restriction.gender IS NOT NULL OR restriction.province IS NOT NULL
-              )
-          )
-          OR EXISTS (
-            SELECT 1 FROM ad_targeting target
-            WHERE target.ad_id = a.ad_id
-              AND (target.age_from IS NULL OR (viewer.birth_year IS NOT NULL AND YEAR(GETDATE()) - viewer.birth_year >= target.age_from))
-              AND (target.age_to IS NULL OR (viewer.birth_year IS NOT NULL AND YEAR(GETDATE()) - viewer.birth_year <= target.age_to))
-              AND (target.gender IS NULL OR target.gender = viewer.gender)
-              AND (target.province IS NULL OR target.province = viewer.province)
-          )
-        )
     `;
-    const params = [userId, today, userId, today];
+    const params = [userId, today, today];
+
+    if (userId !== null) {
+      const viewer = await query('SELECT birth_year, gender, province FROM users WHERE user_id = ?', [userId]);
+      const viewerData = viewer[0] || { birth_year: null, gender: null, province: null };
+      const currentYear = new Date().getFullYear();
+      const viewerAge = viewerData.birth_year != null ? currentYear - Number(viewerData.birth_year) : null;
+      sql += ` AND (
+        NOT EXISTS (
+          SELECT 1 FROM ad_targeting restriction
+          WHERE restriction.ad_id = a.ad_id
+            AND (
+              restriction.age_from IS NOT NULL OR restriction.age_to IS NOT NULL OR
+              restriction.gender IS NOT NULL OR restriction.province IS NOT NULL
+            )
+        )
+        OR EXISTS (
+          SELECT 1 FROM ad_targeting target
+          WHERE target.ad_id = a.ad_id
+            AND (target.age_from IS NULL OR (? IS NOT NULL AND ? >= target.age_from))
+            AND (target.age_to IS NULL OR (? IS NOT NULL AND ? <= target.age_to))
+            AND (target.gender IS NULL OR target.gender = ?)
+            AND (target.province IS NULL OR target.province = ?)
+        )
+      )`;
+      params.push(
+        viewerAge,
+        viewerAge,
+        viewerAge,
+        viewerAge,
+        viewerData.gender ?? null,
+        viewerData.province ?? null
+      );
+    }
 
     if (categoryId) {
       sql += ' AND a.category_id = ?';
@@ -85,7 +99,7 @@ export async function GET(request) {
     sql += ' ORDER BY a.reward_xu DESC, a.ad_id DESC';
     const ads = await query(sql, params);
 
-    return NextResponse.json({ success: true, ads });
+    return NextResponse.json({ success: true, verification_mode: 'SANDBOX', ads });
   } catch (error) {
     console.error('API Ads GET error:', error);
     return NextResponse.json({ success: false, message: 'Không thể tải quảng cáo lúc này.' }, { status: 500 });
@@ -98,7 +112,12 @@ export async function POST(request) {
     const auth = await requireSession(request, ['ADVERTISER', 'ADMIN']);
     if (auth.response) return auth.response;
 
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ success: false, message: 'Dữ liệu chiến dịch không hợp lệ.' }, { status: 400 });
+    }
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return NextResponse.json({ success: false, message: 'Dữ liệu chiến dịch không hợp lệ.' }, { status: 400 });
     }

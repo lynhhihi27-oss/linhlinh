@@ -27,14 +27,14 @@ export async function GET(request) {
       ),
       query(
         `SELECT COUNT(v.view_id) AS total_views,
-                COALESCE(SUM(CASE WHEN v.view_status = 'COMPLETED' THEN 1 ELSE 0 END), 0) AS valid_views,
+                COALESCE(SUM(CASE WHEN v.view_status = 'COMPLETED' AND v.verified_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS valid_views,
                 COALESCE(SUM(CASE WHEN v.view_status = 'INVALID' THEN 1 ELSE 0 END), 0) AS invalid_views
          FROM ads a LEFT JOIN ad_views v ON v.ad_id = a.ad_id${viewFilter}
          WHERE a.advertiser_id = ?`,
         [...viewParams, auth.user.user_id]
       ),
       query(
-        `SELECT v.view_date, v.view_status
+        `SELECT v.view_date, v.view_status, v.verified_at
          FROM ad_views v JOIN ads a ON a.ad_id = v.ad_id
          WHERE a.advertiser_id = ? AND v.view_date >= ? AND v.view_date < ?`,
         [auth.user.user_id, ...chart]

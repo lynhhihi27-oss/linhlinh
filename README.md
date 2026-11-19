@@ -29,6 +29,7 @@ Mặc định ứng dụng kết nối tới `localhost\SQLEXPRESS`, cơ sở d�
    sqlcmd -S ".\SQLEXPRESS" -E -b -f i:65001 -i ".\migrations\20261022_add_redemption_idempotency.sql"
    sqlcmd -S ".\SQLEXPRESS" -E -b -f i:65001 -i ".\migrations\20261022_add_demo_video_campaigns.sql"
    sqlcmd -S ".\SQLEXPRESS" -E -b -f i:65001 -i ".\migrations\20261110_add_sprint5_features.sql"
+   sqlcmd -S ".\SQLEXPRESS" -E -b -f i:65001 -i ".\migrations\20261119_add_ad_view_verification.sql"
    ```
 
    Các migration không xóa dữ liệu hiện có. Migration video có thể chạy lại an toàn; migration đổi quà thêm cột khóa yêu cầu tùy chọn và unique index có lọc, các đơn cũ giữ nguyên `NULL`.
@@ -71,8 +72,9 @@ Mặc định ứng dụng kết nối tới `localhost\SQLEXPRESS`, cơ sở d�
 ## Tài khoản và phiên đăng nhập
 
 - Đăng nhập tạo cookie phiên `HttpOnly`, `SameSite=Lax`, hết hạn sau 7 ngày; đăng xuất sẽ xóa cookie.
-- Quyền và danh tính được đọc từ cơ sở dữ liệu ở backend cho mỗi API request; không thể đổi tài khoản bằng cách sửa `userId` hoặc `role` gửi từ trình duyệt.
-- Tài khoản mới cần mật khẩu từ 8 ký tự. Mật khẩu được băm bằng scrypt; mật khẩu mẫu cũ `123456` chỉ dùng với tài khoản khởi tạo và được nâng cấp sang hash mới sau lần đăng nhập đầu tiên.
+- Token phiên chỉ được gửi qua cookie, không trả trong JSON đăng nhập. Quyền và danh tính được đọc từ cơ sở dữ liệu ở backend cho mỗi API request; header, query string hoặc body `userId`/`role` không thể xác thực hay đổi tài khoản.
+- Môi trường production bắt buộc có `AUTH_SECRET` riêng dài ít nhất 32 ký tự; giá trị mặc định chỉ dành cho phát triển local.
+- Tài khoản mới cần mật khẩu từ 8 ký tự. Mật khẩu mới được băm bằng bcrypt; hash scrypt cũ vẫn được hỗ trợ để tương thích dữ liệu hiện có.
 - Khách có thể xem danh sách quảng cáo; cần đăng nhập để đổi quà hoặc dùng ví.
 - Người dùng có thể sửa họ tên, số điện thoại, giới tính và tỉnh/thành trong tab **Hồ sơ**. Email và số dư không thể sửa từ giao diện hồ sơ.
 - Sổ cái ví tải 25 giao dịch mỗi trang, hỗ trợ lọc theo loại và tải thêm; số liệu tổng vẫn tính trên toàn bộ giao dịch của tài khoản.
@@ -81,7 +83,9 @@ Mặc định ứng dụng kết nối tới `localhost\SQLEXPRESS`, cơ sở d�
 
 ## Giới hạn tính năng hiện tại
 
-- Nhận Xu từ quảng cáo đang bị khóa ở cả giao diện và API. Máy chủ hiện chỉ có thể đo thời gian từ lúc mở phiên; chưa tích hợp API xác minh của YouTube hoặc nhà cung cấp quảng cáo nên không thể xác nhận video đã thực sự phát. Không có Xu nào được cộng từ bộ đếm thời gian.
+- Nhận Xu từ quảng cáo đang bị khóa ở cả giao diện và API. Phiên xem hiển thị rõ `DEMO / SANDBOX`; API hoàn tất trả `503 AD_VERIFICATION_NOT_CONFIGURED` cho đến khi tích hợp xác minh từ nhà cung cấp. Bộ đếm thời gian không xác minh lượt xem và không cộng Xu.
+- Migration `20261119_add_ad_view_verification.sql` chỉ thêm cột/xác thực cho bằng chứng nhà cung cấp; các lượt `COMPLETED` cũ được giữ nguyên nhưng không được xem là xác minh hợp lệ nếu chưa có bằng chứng.
+- OTP chưa được bật vì chưa cấu hình nhà cung cấp. API trả `503 OTP_PROVIDER_NOT_CONFIGURED`, không phát sinh hoặc trả mã OTP thử nghiệm.
 - Các yêu cầu đổi quà giữ chỗ Xu và tồn kho ở trạng thái chờ. Quản trị viên chỉ được phê duyệt sau khi nhập mã quà thật do nhà cung cấp cấp; ứng dụng không tự sinh mã giả.
 - API đổi quà yêu cầu migration `20261022_add_redemption_idempotency.sql` để lặp lại cùng request key không trừ Xu hoặc tồn kho lần nữa.
 - Dữ liệu tài khoản, quảng cáo, quà và giao dịch trong script khởi tạo là dữ liệu mẫu phục vụ trình diễn, không phải hàng hóa/mã đổi quà thực tế.

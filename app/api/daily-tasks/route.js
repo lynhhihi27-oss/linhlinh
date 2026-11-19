@@ -20,7 +20,8 @@ export async function GET(request) {
       ),
       query(
         `SELECT COUNT(*) AS completed_views FROM ad_views
-         WHERE user_id = ? AND view_date = ? AND view_status = 'COMPLETED'`,
+         WHERE user_id = ? AND view_date = ? AND view_status = 'COMPLETED'
+           AND verified_at IS NOT NULL`,
         [auth.user.user_id, date]
       ),
       query(

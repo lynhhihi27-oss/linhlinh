@@ -31,6 +31,20 @@ const transactionTypeLabels = {
   ADJUST: 'Điều chỉnh'
 };
 
+function getYouTubeVideoId(value) {
+  try {
+    const url = new URL(value);
+    const host = url.hostname.toLowerCase();
+    const path = url.pathname.split('/').filter(Boolean);
+    const candidate = host === 'youtu.be'
+      ? path[0]
+      : url.searchParams.get('v') || (['embed', 'shorts'].includes(path[0]) ? path[1] : null);
+    return candidate && /^[\w-]{11}$/.test(candidate) ? candidate : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function YouTubeXuApp() {
   // Current active user & role
   const [currentUser, setCurrentUser] = useState(null);
@@ -83,7 +97,7 @@ export default function YouTubeXuApp() {
   // New Ad Campaign Form (UC-04)
   const [newCampaign, setNewCampaign] = useState({
     title: '',
-    video_url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    video_url: '',
     duration_sec: 15,
     reward_xu: 5,
     budget_xu: 5000,
@@ -117,6 +131,14 @@ export default function YouTubeXuApp() {
   // Rewards subtab
   const [rewardSubTab, setRewardSubTab] = useState('shop'); // 'shop' | 'my-gifts'
 
+  // Watch Ad Modal (UC-01)
+  const [watchingAd, setWatchingAd] = useState(null);
+  const [watchToken, setWatchToken] = useState('');
+  const [watchedSeconds, setWatchedSeconds] = useState(0);
+  const [startingAdId, setStartingAdId] = useState(null);
+  const [isCompletingWatch, setIsCompletingWatch] = useState(false);
+  const [isTabHidden, setIsTabHidden] = useState(false);
+
   // Helper notification toast
   const showToast = (message, type = 'success') => {
     setNotification({ message, type });
@@ -129,7 +151,7 @@ export default function YouTubeXuApp() {
       setIsLoading(true);
       const res = await fetch('/api/auth/me');
       const data = await res.json();
-      if (data.success) {
+      if (data.success && data.user) {
         setCurrentUser(data.user);
         setProfileForm({
           full_name: data.user.full_name || '',
@@ -140,6 +162,8 @@ export default function YouTubeXuApp() {
         if (data.user?.system_role === 'ADMIN') setActiveTab('admin');
         else if (data.user?.system_role === 'ADVERTISER') setActiveTab('advertiser');
         else setActiveTab(tab => tab === 'admin' || tab === 'advertiser' ? 'watch' : tab);
+      } else if (data.success) {
+        setCurrentUser(null);
       }
     } catch (err) {
       console.error(err);
@@ -350,6 +374,117 @@ export default function YouTubeXuApp() {
     };
   }, [currentUserId]);
 
+  // Xem quảng cáo nhận Xu (UC-01)
+  useEffect(() => {
+    if (!watchingAd) return undefined;
+    const handleVisibilityChange = () => {
+      setIsTabHidden(document.hidden || document.visibilityState !== 'visible');
+    };
+    handleVisibilityChange();
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    const timer = window.setInterval(() => {
+      if (document.hidden || document.visibilityState !== 'visible') {
+        setIsTabHidden(true);
+        return;
+      }
+      setIsTabHidden(false);
+      setWatchedSeconds((prev) => (prev < watchingAd.duration_sec ? prev + 1 : prev));
+    }, 1000);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.clearInterval(timer);
+    };
+  }, [watchingAd]);
+
+  const handleStartWatch = async (ad) => {
+    if (!currentUser) {
+      showToast('Vui lòng đăng nhập tài khoản Người xem để nhận Xu!', 'error');
+      setShowLoginModal(true);
+      return;
+    }
+    if (currentUser.system_role !== 'VIEWER') {
+      showToast('Chỉ tài khoản Người xem mới có thể xem quảng cáo nhận Xu.', 'error');
+      return;
+    }
+    setStartingAdId(ad.ad_id);
+    try {
+      const res = await fetch('/api/views/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ user_id: currentUser.user_id, ad_id: ad.ad_id })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        showToast(data.message || 'Không thể bắt đầu xem quảng cáo.', 'error');
+        return;
+      }
+      setWatchingAd(ad);
+      setWatchToken(data.view_token);
+      setWatchedSeconds(0);
+      setIsTabHidden(false);
+    } catch (error) {
+      console.error(error);
+      showToast('Không thể kết nối máy chủ khi bắt đầu xem quảng cáo.', 'error');
+    } finally {
+      setStartingAdId(null);
+    }
+  };
+
+  const handleCompleteWatch = async () => {
+    if (!watchingAd || !watchToken || isCompletingWatch) return;
+    setIsCompletingWatch(true);
+    try {
+      const res = await fetch('/api/views/complete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          user_id: currentUser.user_id,
+          ad_id: watchingAd.ad_id,
+          view_token: watchToken,
+          watched_seconds: watchedSeconds
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        showToast(data.message || 'Không thể xác nhận lượt xem.', 'error');
+        return;
+      }
+      showToast(data.message || `Đã cộng +${data.reward_xu} Xu vào ví!`, 'success');
+      setCurrentUser((prev) => (prev ? { ...prev, xu_balance: data.balance_after } : prev));
+      setWatchingAd(null);
+      setWatchToken('');
+      setWatchedSeconds(0);
+      loadAds();
+    } catch (error) {
+      console.error(error);
+      showToast('Lỗi kết nối khi nhận Xu!', 'error');
+    } finally {
+      setIsCompletingWatch(false);
+    }
+  };
+
+  const handleCloseWatchModal = async () => {
+    if (watchingAd && watchToken && watchedSeconds < watchingAd.duration_sec) {
+      try {
+        await fetch('/api/views/complete', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: currentUser?.user_id,
+            ad_id: watchingAd.ad_id,
+            view_token: watchToken,
+            watched_seconds: watchedSeconds
+          })
+        });
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    setWatchingAd(null);
+    setWatchToken('');
+    setWatchedSeconds(0);
+  };
+
   // Đổi quà (UC-02)
   const handleRedeem = (reward) => {
     if (!currentUser) {
@@ -439,7 +574,7 @@ export default function YouTubeXuApp() {
         loadAdvertiserAds();
         setNewCampaign({
           title: '',
-          video_url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+          video_url: '',
           duration_sec: 15,
           reward_xu: 5,
           budget_xu: 5000,
@@ -931,7 +1066,7 @@ export default function YouTubeXuApp() {
               )}
             </h1>
             <p className="hero-description">
-              {activeTab === 'watch' && 'Khám phá các chiến dịch video theo danh mục. Tính năng nhận Xu sẽ mở khi hệ thống xác minh lượt xem được tích hợp.'}
+              {activeTab === 'watch' && 'Khám phá video DEMO/SANDBOX. Lượt xem chưa được nhà cung cấp xác minh nên hiện không cộng Xu.'}
               {activeTab === 'rewards' && 'Chọn phần quà bạn muốn đổi. Yêu cầu sẽ được xử lý sau khi quản trị viên xác nhận mã quà từ nhà cung cấp.'}
               {activeTab === 'wallet' && 'Theo dõi số dư và lịch sử cộng, sử dụng hoặc điều chỉnh Xu trong ví của bạn.'}
               {activeTab === 'profile' && 'Cập nhật thông tin cá nhân của bạn.'}
@@ -946,8 +1081,8 @@ export default function YouTubeXuApp() {
               <strong>1.000 Xu = 10.000đ</strong>
             </div>
             <div className="hero-metric hero-metric-blue">
-              <span className="hero-metric-label">XÁC MINH LƯỢT XEM</span>
-              <strong>Đang hoàn thiện</strong>
+              <span className="hero-metric-label">TRẠNG THÁI NHẬN XU</span>
+              <strong>Chưa xác minh</strong>
             </div>
           </div>
         </div>
@@ -1006,8 +1141,8 @@ export default function YouTubeXuApp() {
             </div>
 
             <div className="glass-panel watch-notice" role="note">
-              <strong>Tính năng nhận Xu đang được hoàn thiện.</strong>{' '}
-              Hệ thống chưa xác minh được lượt xem với nhà cung cấp, nên hiện chưa ghi nhận lượt xem hoặc cộng Xu.
+              <strong>DEMO / SANDBOX:</strong>{' '}
+              Video và chiến dịch hiển thị để xem thử. Chưa tích hợp nhà cung cấp xác minh lượt xem, vì vậy bộ đếm không được dùng để cộng Xu.
             </div>
 
             {/* Ads Grid */}
@@ -1060,16 +1195,19 @@ export default function YouTubeXuApp() {
                       alignItems: 'center',
                       justifyContent: 'center'
                     }}>
-                      {/* Load these non-critical thumbnails directly and lazily instead of through the Next.js image optimizer. */}
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={`https://img.youtube.com/vi/${(ad.video_url.match(/(?:v=|\/)([\w-]{11})/) || [])[1] || 'dQw4w9WgXcQ'}/hqdefault.jpg`}
-                        alt={ad.title}
-                        loading="lazy"
-                        decoding="async"
-                        style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.8 }}
-                        onError={(e) => { e.target.style.display = 'none'; }}
-                      />
+                      {getYouTubeVideoId(ad.video_url) ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={`https://img.youtube.com/vi/${getYouTubeVideoId(ad.video_url)}/hqdefault.jpg`}
+                          alt={ad.title}
+                          loading="lazy"
+                          decoding="async"
+                          style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: 0.8 }}
+                          onError={(e) => { e.target.style.display = 'none'; }}
+                        />
+                      ) : (
+                        <span style={{ color: 'var(--text-muted)' }}>Video DEMO</span>
+                      )}
                       <div style={{
                         position: 'absolute',
                         inset: 0,
@@ -1097,7 +1235,7 @@ export default function YouTubeXuApp() {
                       </div>
                       <div style={{ position: 'absolute', top: '12px', right: '12px' }}>
                         <span className="badge badge-gold">
-                          <Coins size={13} /> +{ad.reward_xu} XU
+                          <Coins size={13} /> Dự kiến +{ad.reward_xu} Xu
                         </span>
                       </div>
                     </div>
@@ -1123,15 +1261,15 @@ export default function YouTubeXuApp() {
 
                         {ad.viewed_today > 0 ? (
                           <button className="btn btn-secondary btn-sm" disabled style={{ opacity: 0.6 }}>
-                            <CheckCircle2 size={14} color="#10b981" /> Đã nhận xu hôm nay
+                            <CheckCircle2 size={14} color="#10b981" /> Đã xác minh hôm nay
                           </button>
                         ) : (
                           <button 
                             className="btn btn-primary btn-sm"
-                            disabled
-                            title="Chưa tích hợp xác minh phát quảng cáo"
+                            onClick={() => handleStartWatch(ad)}
+                            disabled={startingAdId === ad.ad_id}
                           >
-                            <Clock size={14} /> Tạm khóa nhận Xu
+                            <Play size={14} fill="#fff" /> {startingAdId === ad.ad_id ? 'Đang mở...' : 'Xem thử (SANDBOX)'}
                           </button>
                         )}
                       </div>
@@ -2189,6 +2327,94 @@ export default function YouTubeXuApp() {
                 Đăng Ký & Nhận Thưởng
               </button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {watchingAd && (
+        <div className="modal-overlay">
+          <div className="modal-box" role="dialog" aria-modal="true" aria-labelledby="watch-modal-heading" style={{ maxWidth: '720px', width: '95%' }}>
+            <div style={{ padding: '18px 22px', borderBottom: '1px solid var(--border-subtle)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h3 id="watch-modal-heading" style={{ fontSize: '1.15rem', fontWeight: 700 }}>{watchingAd.title}</h3>
+                <p style={{ fontSize: '0.82rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                  Nhà quảng cáo: {watchingAd.advertiser_name || 'Nhà quảng cáo'} · Mức thưởng dự kiến: {watchingAd.reward_xu} Xu
+                </p>
+              </div>
+              <button
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={handleCloseWatchModal}
+                disabled={isCompletingWatch}
+              >
+                Đóng
+              </button>
+            </div>
+            <div style={{ padding: '20px 22px' }}>
+              <div role="status" style={{ padding: '12px 14px', borderRadius: '8px', background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.35)', color: '#fcd34d', fontSize: '0.85rem', marginBottom: '16px' }}>
+                <strong>DEMO / SANDBOX:</strong> Chưa tích hợp nhà cung cấp xác minh quảng cáo. Bộ đếm chỉ để xem thử, không xác minh lượt xem và không cộng Xu.
+              </div>
+              <div style={{ position: 'relative', width: '100%', paddingTop: '56.25%', borderRadius: '12px', overflow: 'hidden', background: '#000', marginBottom: '16px' }}>
+                {getYouTubeVideoId(watchingAd.video_url) ? (
+                  <iframe
+                    src={`https://www.youtube.com/embed/${getYouTubeVideoId(watchingAd.video_url)}?autoplay=1&rel=0`}
+                    title={watchingAd.title}
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', border: 'none' }}
+                  />
+                ) : (
+                  <div role="alert" style={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'center', padding: '20px', textAlign: 'center', color: '#fca5a5' }}>
+                    Đường dẫn video YouTube không hợp lệ.
+                  </div>
+                )}
+              </div>
+
+              {isTabHidden && watchedSeconds < watchingAd.duration_sec && (
+                <div style={{ padding: '10px 14px', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.35)', color: '#fca5a5', fontSize: '0.85rem', marginBottom: '12px' }}>
+                  Bộ đếm đang tạm dừng vì bạn đã rời khỏi tab. Hãy giữ tab mở để tiếp tục tính giờ.
+                </div>
+              )}
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '16px', flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: '200px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.85rem', marginBottom: '6px' }}>
+                    <span style={{ color: 'var(--text-muted)' }}>
+                      Thời gian đã xem: <strong style={{ color: '#fff' }}>{watchedSeconds}/{watchingAd.duration_sec} giây</strong>
+                    </span>
+                    <span style={{ color: watchedSeconds >= watchingAd.duration_sec ? '#10b981' : '#f59e0b', fontWeight: 700 }}>
+                      {watchedSeconds >= watchingAd.duration_sec
+                        ? 'Đã đủ thời lượng!'
+                        : `Còn ${Math.max(0, watchingAd.duration_sec - watchedSeconds)} giây`}
+                    </span>
+                  </div>
+                  <div style={{ height: '8px', borderRadius: '999px', background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
+                    <div
+                      style={{
+                        height: '100%',
+                        width: `${Math.min(100, Math.round((watchedSeconds / watchingAd.duration_sec) * 100))}%`,
+                        background: watchedSeconds >= watchingAd.duration_sec ? '#10b981' : 'var(--primary)',
+                        transition: 'width 0.3s ease'
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={handleCompleteWatch}
+                  disabled={watchedSeconds < watchingAd.duration_sec || isCompletingWatch}
+                >
+                  <Coins size={16} />
+                  {isCompletingWatch
+                    ? 'Đang kiểm tra...'
+                    : watchedSeconds >= watchingAd.duration_sec
+                      ? 'Kiểm tra trạng thái (SANDBOX)'
+                      : `Chờ ${Math.max(0, watchingAd.duration_sec - watchedSeconds)}s`}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}

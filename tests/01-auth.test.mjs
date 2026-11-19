@@ -2,7 +2,7 @@
 // Mã test: TC-xxx = test case trong TC-01.xlsx | EXT = kiểm thử bổ sung | SEC = bảo mật | CT = hợp đồng API-01
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { seedBase, call, one, countOf, login, routeExists, addUser, injectFault } from './helpers.mjs';
+import { seedBase, call, one, countOf, login, routeExists, addUser, injectFault, as } from './helpers.mjs';
 
 const YEAR = new Date().getFullYear();
 const form = (o = {}) => ({
@@ -107,11 +107,11 @@ describe('Tài khoản – đăng nhập (TC-007 và bảo mật xác thực)', 
       'Thông báo khác nhau giữa "sai mật khẩu" và "tài khoản không tồn tại" -> kẻ tấn công dò được email/SĐT nào đã đăng ký');
   });
 
-  it('SEC-06 | đăng nhập thành công trả JWT để xác thực các API sau (API-01)', async () => {
+  it('SEC-06 | đăng nhập phát hành cookie phiên HttpOnly, không trả token cho JavaScript', async () => {
     const r = await login('long.tv@gmail.com', '123456');
     assert.equal(r.status, 200);
-    const token = r.body.token || r.body.access_token || r.body.jwt || r.body.data?.token;
-    assert.ok(token, 'Đăng nhập không phát hành token/JWT; AUTH_SECRET trong .env.local không được dùng ở đâu');
+    assert.match(r.setCookie || '', /youtube_xu_session=.*HttpOnly/i, 'thiếu cookie phiên HttpOnly');
+    assert.equal(r.body.token, undefined, 'token phiên bị trả trong JSON và có thể bị JavaScript đánh cắp');
   });
 
   it('SEC-07 | chống SQL injection ở form đăng nhập', async () => {
@@ -173,18 +173,19 @@ describe('Đăng ký – kiểm tra dữ liệu đầu vào (EXT)', () => {
   it('EXT-05 | email có khoảng trắng thừa được cắt trước khi lưu (để đăng nhập lại được)', async () => {
     const reg = await register(form({ email: '  trim@test.vn  ' }));
     assert.equal(reg.status, 200, reg.raw);
-    const r = await login('trim@test.vn', '123456');
+    const r = await login('trim@test.vn', 'MatKhau@123');
     assert.equal(r.status, 200, `Không đăng nhập lại được bằng email đã nhập (HTTP ${r.status}): register lưu nguyên khoảng trắng còn login thì cắt`);
   });
 
-  it('EXT-06 | mã giới thiệu: hợp lệ thì liên kết; mã sai hoặc người giới thiệu bị khóa thì bỏ qua', async () => {
+  it('EXT-06 | mã giới thiệu sai hoặc người giới thiệu bị khóa bị từ chối', async () => {
     const ok = await register(form({ email: 'r1@t.vn', phone: '0911111111', referral_code: 'YX00000005' }));
     const bad = await register(form({ email: 'r2@t.vn', phone: '0911111112', referral_code: 'KHONGCO' }));
     const locked = await register(form({ email: 'r3@t.vn', phone: '0911111113', referral_code: 'YX00000010' }));
     const ref = id => one('SELECT referred_by AS r FROM users WHERE user_id = ?', id).r;
     assert.equal(ref(ok.body.user_id), 5);
-    assert.equal(ref(bad.body.user_id), null);
-    assert.equal(ref(locked.body.user_id), null);
+    assert.equal(bad.status, 400);
+    assert.equal(locked.status, 400);
+    assert.equal(countOf('users', 'email IN (?, ?)', 'r2@t.vn', 'r3@t.vn'), 0);
   });
 
   it('EXT-07 | dữ liệu có ký tự SQL được lưu nguyên văn, không phá CSDL', async () => {
@@ -213,8 +214,14 @@ describe('Hợp đồng API-01 – tài khoản (CT)', () => {
 
   it('CT-06 | body JSON sai định dạng trả 400, không phải 500 kèm lỗi nội bộ', async () => {
     const bad = [];
-    for (const [rel, method] of [['auth/login', 'POST'], ['auth/register', 'POST'], ['views/start', 'POST'], ['views/complete', 'POST'], ['redeem', 'POST'], ['ads', 'POST']]) {
-      const r = await call(rel, method, { body: '{khong phai json' });
+    for (const [rel, method, headers] of [
+      ['auth/login', 'POST'],
+      ['auth/register', 'POST'],
+      ['views/start', 'POST', as(5)],
+      ['redeem', 'POST', as(5)],
+      ['ads', 'POST', as(2)]
+    ]) {
+      const r = await call(rel, method, { body: '{khong phai json', headers });
       if (r.status !== 400) bad.push(`${method} /api/${rel} -> ${r.status} "${r.body?.message ?? ''}"`);
     }
     assert.deepEqual(bad, [], 'Các route sau không kiểm soát JSON lỗi:\n  ' + bad.join('\n  '));

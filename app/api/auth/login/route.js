@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server.js';
 import { query } from '@/lib/db';
 import { assertSessionConfig, createSessionCookie, hashPassword, verifyPassword } from '@/lib/auth';
 
@@ -7,7 +7,12 @@ export const dynamic = 'force-dynamic';
 export async function POST(request) {
   try {
     assertSessionConfig();
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ success: false, message: 'Dữ liệu đăng nhập không hợp lệ.' }, { status: 400 });
+    }
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return NextResponse.json({ success: false, message: 'Dữ liệu đăng nhập không hợp lệ.' }, { status: 400 });
     }
@@ -24,12 +29,13 @@ export async function POST(request) {
       }, { status: 400 });
     }
 
+    const normalizedIdentifier = emailOrPhone.trim();
     const users = await query(
       `SELECT user_id, email, phone, referral_code, full_name, password_hash, birth_year, gender, province, system_role, account_status, xu_balance, referred_by, created_at
        FROM users 
        WHERE email = ? OR phone = ? 
        LIMIT 1`,
-      [emailOrPhone.trim().toLowerCase(), emailOrPhone.trim()]
+      [normalizedIdentifier.toLowerCase(), normalizedIdentifier]
     );
 
     if (users.length === 0) {
@@ -40,6 +46,13 @@ export async function POST(request) {
     }
 
     const user = users[0];
+    if (user.account_status === 'LOCKED') {
+      return NextResponse.json({
+        success: false,
+        message: 'Tài khoản của bạn đang bị khóa.'
+      }, { status: 403 });
+    }
+
     const { valid, needsRehash } = await verifyPassword(password, user.password_hash);
     if (!valid) {
       return NextResponse.json({
@@ -53,13 +66,11 @@ export async function POST(request) {
       await query('UPDATE users SET password_hash = ? WHERE user_id = ?', [await hashPassword(password), user.user_id]);
     }
 
-    delete user.password_hash;
+    const { password_hash, ...safeUser } = user;
     const response = NextResponse.json({
       success: true,
-      message: user.account_status === 'LOCKED'
-        ? 'Đăng nhập thành công, nhưng tài khoản hiện đang bị khóa.'
-        : 'Đăng nhập thành công!',
-      user
+      message: 'Đăng nhập thành công!',
+      user: safeUser
     });
     response.headers.set('Set-Cookie', sessionCookie);
     return response;

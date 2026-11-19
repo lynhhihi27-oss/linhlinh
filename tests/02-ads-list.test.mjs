@@ -1,11 +1,11 @@
 // TC-008 → TC-011: danh sách quảng cáo dành cho người xem.
 import { describe, it, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { seedBase, call, addUser, addAd, addTargeting, addView, dayOffset, matchesTargeting, rows } from './helpers.mjs';
+import { seedBase, call, addUser, addAd, addTargeting, addView, dayOffset, matchesTargeting, rows, as } from './helpers.mjs';
 
 const YEAR = new Date().getFullYear();
 const listFor = async (userId, extra = {}) =>
-  (await call('ads', 'GET', { query: { role: 'VIEWER', userId, ...extra } })).body.ads;
+  (await call('ads', 'GET', { query: { role: 'VIEWER', userId, ...extra }, headers: as(userId) })).body.ads;
 const idsFor = async (userId, extra) => (await listFor(userId, extra)).map(a => a.ad_id).sort((a, b) => a - b);
 
 describe('Danh sách quảng cáo cho người xem', () => {
@@ -73,7 +73,13 @@ describe('Danh sách quảng cáo cho người xem', () => {
   });
 
   it('TC-011 | quảng cáo đã xem hôm nay được đánh dấu để khóa nút xem', async () => {
-    addView({ user_id: 5, ad_id: 1 });
+    addView({
+      user_id: 5,
+      ad_id: 1,
+      verification_provider: 'test-provider',
+      verification_event_id: 'verified-view-today',
+      verified_at: new Date().toISOString()
+    });
     addView({ user_id: 5, ad_id: 2, view_date: dayOffset(-1) });   // xem hôm qua: không tính
     const list = await listFor(5);
     const byId = Object.fromEntries(list.map(a => [a.ad_id, a]));

@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server.js';
 import { query } from '@/lib/db';
 import { requireSession } from '@/lib/auth';
 
@@ -33,7 +33,7 @@ export async function GET(request) {
     const viewStats = await query(
       `SELECT 
          COUNT(*) AS total_views,
-         SUM(CASE WHEN view_status = 'COMPLETED' THEN 1 ELSE 0 END) AS completed_views,
+         SUM(CASE WHEN view_status = 'COMPLETED' AND verified_at IS NOT NULL THEN 1 ELSE 0 END) AS completed_views,
          SUM(CASE WHEN view_status = 'INVALID' THEN 1 ELSE 0 END) AS invalid_views
        FROM ad_views`
     );

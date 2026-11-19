@@ -9,7 +9,12 @@ export async function POST(request) {
     if (auth.response) return auth.response;
     connection = await pool.getConnection();
 
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json({ success: false, message: 'Dữ liệu đổi quà không hợp lệ.' }, { status: 400 });
+    }
     if (!body || typeof body !== 'object' || Array.isArray(body)) {
       return NextResponse.json({ success: false, message: 'Dữ liệu đổi quà không hợp lệ.' }, { status: 400 });
     }

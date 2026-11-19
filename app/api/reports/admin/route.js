@@ -27,17 +27,18 @@ export async function GET(request) {
       ),
       query(
         `SELECT COUNT(*) AS total_transactions,
-                COALESCE(SUM(CASE WHEN txn_type IN ('EARN', 'BONUS') AND amount > 0
-                  AND (view_id IS NULL OR EXISTS (
-                    SELECT 1 FROM ad_views v WHERE v.view_id = xu_transactions.view_id AND v.view_status = 'COMPLETED'
-                  )) THEN amount ELSE 0 END), 0) AS xu_issued,
-                COALESCE(SUM(CASE WHEN txn_type = 'REDEEM' AND amount < 0 THEN -amount ELSE 0 END), 0) AS xu_redeemed
-         FROM xu_transactions WHERE 1 = 1${timeFilter}`,
+                COALESCE(SUM(CASE WHEN t.txn_type IN ('EARN', 'BONUS') AND t.amount > 0
+                  AND (t.view_id IS NULL OR (v.view_status = 'COMPLETED' AND v.verified_at IS NOT NULL))
+                  THEN t.amount ELSE 0 END), 0) AS xu_issued,
+                COALESCE(SUM(CASE WHEN t.txn_type = 'REDEEM' AND t.amount < 0 THEN -t.amount ELSE 0 END), 0) AS xu_redeemed
+         FROM xu_transactions t
+         LEFT JOIN ad_views v ON v.view_id = t.view_id
+         WHERE 1 = 1${timeFilter.replaceAll('created_at', 't.created_at')}`,
         params
       ),
       query(
         `SELECT COUNT(*) AS total_views,
-                COALESCE(SUM(CASE WHEN view_status = 'COMPLETED' THEN 1 ELSE 0 END), 0) AS valid_views,
+                COALESCE(SUM(CASE WHEN view_status = 'COMPLETED' AND verified_at IS NOT NULL THEN 1 ELSE 0 END), 0) AS valid_views,
                 COALESCE(SUM(CASE WHEN view_status = 'INVALID' THEN 1 ELSE 0 END), 0) AS invalid_views
          FROM ad_views WHERE 1 = 1${viewTimeFilter}`,
         params
@@ -56,13 +57,14 @@ export async function GET(request) {
         `SELECT COALESCE(SUM(spent_xu), 0) AS campaign_spend FROM ads`
       ),
       query(
-        `SELECT t.created_at, t.txn_type, t.amount, t.view_id, v.view_status AS referenced_view_status
+        `SELECT t.created_at, t.txn_type, t.amount, t.view_id, v.view_status AS referenced_view_status,
+                v.verified_at AS referenced_view_verified_at
          FROM xu_transactions t LEFT JOIN ad_views v ON v.view_id = t.view_id
          WHERE t.created_at >= ? AND t.created_at < ?`,
         chart
       ),
       query(
-        `SELECT view_date, view_status FROM ad_views
+        `SELECT view_date, view_status, verified_at FROM ad_views
          WHERE view_date >= ? AND view_date < ?`,
         chart
       )
@@ -77,7 +79,7 @@ export async function GET(request) {
     };
     for (const transaction of chartTransactions) {
       const validView = transaction.view_id === null || transaction.view_id === undefined ||
-        transaction.referenced_view_status === 'COMPLETED';
+        (transaction.referenced_view_status === 'COMPLETED' && transaction.referenced_view_verified_at);
       if (validView && ['EARN', 'BONUS'].includes(transaction.txn_type) && Number(transaction.amount) > 0) {
         add(transaction.created_at, 'xu_issued', Number(transaction.amount));
       }
@@ -87,7 +89,7 @@ export async function GET(request) {
     }
     for (const view of chartViews) {
       add(view.view_date, 'total_views', 1);
-      if (view.view_status === 'COMPLETED') add(view.view_date, 'valid_views', 1);
+      if (view.view_status === 'COMPLETED' && view.verified_at) add(view.view_date, 'valid_views', 1);
       if (view.view_status === 'INVALID') add(view.view_date, 'invalid_views', 1);
     }
 

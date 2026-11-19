@@ -19,7 +19,8 @@ export async function GET(request) {
     const campaigns = await query(
       `SELECT a.ad_id, a.title, a.status, a.reward_xu, a.budget_xu, a.spent_xu,
               (SELECT COUNT(*) FROM ad_views v WHERE v.ad_id = a.ad_id${timeFilter}) AS total_views,
-              (SELECT COUNT(*) FROM ad_views v WHERE v.ad_id = a.ad_id AND v.view_status = 'COMPLETED'${timeFilter}) AS valid_views,
+              (SELECT COUNT(*) FROM ad_views v WHERE v.ad_id = a.ad_id AND v.view_status = 'COMPLETED'
+                 AND v.verified_at IS NOT NULL${timeFilter}) AS valid_views,
               (SELECT COUNT(*) FROM ad_views v WHERE v.ad_id = a.ad_id AND v.view_status = 'INVALID'${timeFilter}) AS invalid_views
        FROM ads a WHERE a.advertiser_id = ? ORDER BY a.created_at DESC, a.ad_id DESC`,
       [...dates, ...dates, ...dates, auth.user.user_id]

@@ -45,7 +45,8 @@ export async function POST(request, { params }) {
     if (task.TaskType === 'VALID_AD_VIEWS') {
       const [viewCounts] = await connection.execute(
         `SELECT COUNT(*) AS completed_views FROM ad_views
-         WHERE user_id = ? AND view_date = ? AND view_status = 'COMPLETED'`,
+         WHERE user_id = ? AND view_date = ? AND view_status = 'COMPLETED'
+           AND verified_at IS NOT NULL`,
         [auth.user.user_id, date]
       );
       progress = Number(viewCounts[0]?.completed_views || 0);

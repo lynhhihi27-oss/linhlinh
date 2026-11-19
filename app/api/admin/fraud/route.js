@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server.js';
 import pool, { query } from '@/lib/db';
 import { requireSession } from '@/lib/auth';
 
@@ -42,7 +42,6 @@ export async function GET(request) {
     return NextResponse.json({ success: false, message: 'Không thể tải báo cáo quản trị lúc này.' }, { status: 500 });
   }
 }
-
 export async function POST(request) {
   let connection;
   try {

@@ -63,6 +63,9 @@ CREATE TABLE ad_views (
   reward_xu INTEGER NOT NULL DEFAULT 0,
   device_id TEXT NULL,
   ip_address TEXT NULL,
+  verification_provider TEXT NULL,
+  verification_event_id TEXT NULL,
+  verified_at DATETIME NULL,
   view_status TEXT NOT NULL DEFAULT 'STARTED' CHECK (view_status IN ('STARTED','COMPLETED','INVALID')),
   CONSTRAINT uq_user_ad_day UNIQUE (user_id, ad_id, view_date)
 );

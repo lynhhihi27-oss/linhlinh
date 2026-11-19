@@ -2,7 +2,9 @@
 import fs from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { randomUUID } from 'node:crypto';
 import { db, resetDb, injectFault, stats } from './setup/fake-db.mjs';
+import { createSessionCookie } from '../lib/auth.js';
 
 export { db, injectFault, stats };
 export const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -30,7 +32,7 @@ export async function call(rel, method, { body, query, headers = {}, params } = 
   const text = await res.text();
   let json = null;
   try { json = JSON.parse(text); } catch { /* không phải JSON */ }
-  return { status: res.status, body: json, raw: text };
+  return { status: res.status, body: json, raw: text, setCookie: res.headers.get('set-cookie') };
 }
 
 /* ------------------------------ truy vấn nhanh ------------------------------ */
@@ -120,8 +122,14 @@ export function seedBase() {
 }
 
 /* ------------------------------ thao tác nghiệp vụ ------------------------------ */
-export const start = (user_id, ad_id, extra = {}) => call('views/start', 'POST', { body: { user_id, ad_id, ...extra } });
-export const complete = body => call('views/complete', 'POST', { body });
+export const start = (user_id, ad_id, extra = {}) => call('views/start', 'POST', {
+  body: { user_id, ad_id, ...extra },
+  headers: as(user_id)
+});
+export const complete = body => call('views/complete', 'POST', {
+  body,
+  headers: as(body.user_id ?? body.userId)
+});
 
 /** Giả lập "đã trôi qua N giây" bằng cách lùi started_at của lượt xem (không cần chờ thật). */
 export function backdate(view_token, seconds) {
@@ -138,11 +146,14 @@ export async function watchFully(user_id, ad_id) {
   return { start: s, complete: c, token: s.body.view_token };
 }
 
-export const redeem = (user_id, reward_id) => call('redeem', 'POST', { body: { user_id, reward_id } });
+export const redeem = (user_id, reward_id) => call('redeem', 'POST', {
+  body: { user_id, reward_id, request_key: randomUUID() },
+  headers: as(user_id)
+});
 export const login = (emailOrPhone, password) => call('auth/login', 'POST', { body: { emailOrPhone, password } });
 
-/** Header "danh tính" theo quy ước x-user-id mà route /auth/me đang dùng. */
-export const as = user_id => ({ 'x-user-id': String(user_id) });
+/** Signed session cookie used to authenticate requests in route tests. */
+export const as = user_id => ({ cookie: createSessionCookie(user_id) });
 
 /** Tuổi người dùng theo cách app đang tính (năm hiện tại - năm sinh). */
 export const ageOf = u => new Date().getFullYear() - u.birth_year;
